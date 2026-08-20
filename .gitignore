@@ -1,0 +1,49 @@
+﻿# Python virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# AWS / certificates / secrets
+certificates/
+*.key
+*.p12
+*.pfx
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Runtime files
+runtime/
+tmp/
+temp/
+
+# Downloaded OTA files
+ota_downloads/
+ota_artifacts/*.zip
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
