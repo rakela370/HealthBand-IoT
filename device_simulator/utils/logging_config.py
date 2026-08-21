@@ -1,17 +1,28 @@
-﻿"""Central logging configuration for the HealthBand simulator."""
+"""Central logging configuration for the HealthBand simulator."""
 
 import logging
 from pathlib import Path
 
 
-def configure_logging(log_level: str = "INFO") -> None:
+def configure_logging(
+    log_level: str = "INFO",
+) -> None:
+    """Configure console and local file logging."""
+
     logs_directory = Path("logs")
     logs_directory.mkdir(parents=True, exist_ok=True)
 
-    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    numeric_level = getattr(
+        logging,
+        log_level.upper(),
+        logging.INFO,
+    )
 
     formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        fmt=(
+            "%(asctime)s | %(levelname)-8s | "
+            "%(name)s | %(message)s"
+        ),
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
@@ -26,6 +37,7 @@ def configure_logging(log_level: str = "INFO") -> None:
 
     root_logger = logging.getLogger()
     root_logger.setLevel(numeric_level)
+
     root_logger.handlers.clear()
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)

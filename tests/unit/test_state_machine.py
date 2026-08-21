@@ -1,4 +1,4 @@
-﻿"""Unit tests for the HealthBand state machine."""
+"""Unit tests for the HealthBand state machine."""
 
 import pytest
 
