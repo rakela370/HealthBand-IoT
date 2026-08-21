@@ -3,6 +3,17 @@
 import asyncio
 import logging
 
+from device_simulator.alerts.alert import (
+    Alert,
+    AlertSeverity,
+)
+from device_simulator.alerts.alert_manager import (
+    AlertManager,
+)
+from device_simulator.analytics.analytics_manager import (
+    AnalyticsManager,
+    AnalyticsResult,
+)
 from device_simulator.core.device_state import (
     DeviceState,
 )
@@ -16,6 +27,10 @@ from device_simulator.core.state_machine import (
     InvalidStateTransitionError,
     StateMachine,
     StateTransition,
+)
+from device_simulator.device_health.device_health_monitor import (
+    DeviceHealthMonitor,
+    DeviceHealthReport,
 )
 from device_simulator.sensors.sensor_manager import (
     SensorManager,
@@ -36,17 +51,33 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceController:
-    """Coordinates the main lifecycle of the HealthBand device."""
+    """Coordinate the main lifecycle of the HealthBand device."""
 
-    STATE_CHANGED_EVENT = "device.state.changed"
+    STATE_CHANGED_EVENT = (
+        "device.state.changed"
+    )
 
     SENSOR_SNAPSHOT_EVENT = (
         "device.sensors.snapshot"
     )
 
-    # This is intentionally hardcoded during Module 2.
-    # Device Shadow configuration will replace it later.
+    ANALYTICS_EVENT = (
+        "device.analytics.completed"
+    )
+
+    ALERT_EVENT = (
+        "device.alert.generated"
+    )
+
+    DEVICE_HEALTH_EVENT = (
+        "device.health.report"
+    )
+
+    # Temporary local defaults.
+    # Device Shadow will make these configurable later.
     MEASUREMENT_INTERVAL_SEC = 2.0
+    ANALYTICS_WINDOW_SEC = 10.0
+    HEALTH_REPORT_INTERVAL_SEC = 5.0
 
     def __init__(
         self,
@@ -60,48 +91,100 @@ class DeviceController:
         self.device_id = device_id
         self.software_version = software_version
 
-        self.event_bus = event_bus or EventBus()
-        self.scheduler = scheduler or Scheduler()
+        self.event_bus = (
+            event_bus or EventBus()
+        )
 
-        self.state_machine = StateMachine()
+        self.scheduler = (
+            scheduler or Scheduler()
+        )
+
+        self.state_machine = (
+            StateMachine()
+        )
 
         self.user_profile = (
             user_profile or UserProfile()
         )
 
-        self.scenario_engine = ScenarioEngine(
-            self.user_profile
+        self.scenario_engine = (
+            ScenarioEngine(
+                self.user_profile
+            )
         )
 
-        self.sensor_manager = SensorManager(
-            user_profile=self.user_profile,
-            random_seed=random_seed,
+        self.sensor_manager = (
+            SensorManager(
+                user_profile=(
+                    self.user_profile
+                ),
+                random_seed=random_seed,
+            )
+        )
+
+        self.analytics_manager = (
+            AnalyticsManager(
+                device_id=self.device_id,
+                software_version=(
+                    self.software_version
+                ),
+                window_sec=(
+                    self.ANALYTICS_WINDOW_SEC
+                ),
+            )
+        )
+
+        self.alert_manager = (
+            AlertManager(
+                device_id=self.device_id
+            )
+        )
+
+        self.device_health_monitor = (
+            DeviceHealthMonitor(
+                device_id=self.device_id,
+                software_version=(
+                    self.software_version
+                ),
+            )
         )
 
         self.latest_snapshot: (
             SensorSnapshot | None
         ) = None
 
+        self.latest_analytics: (
+            AnalyticsResult | None
+        ) = None
+
+        self.latest_health_report: (
+            DeviceHealthReport | None
+        ) = None
+
         self._started = False
 
     @property
-    def current_state(self) -> DeviceState:
-        """Return the current logical device state."""
+    def current_state(
+        self,
+    ) -> DeviceState:
+        """Return current device state."""
 
-        return self.state_machine.current_state
+        return (
+            self.state_machine.current_state
+        )
 
     @property
     def current_scenario(
         self,
     ) -> SimulationScenario:
-        """Return the active simulation scenario."""
+        """Return active simulation scenario."""
 
         return (
             self.scenario_engine.current_scenario
         )
 
     async def start(self) -> None:
-        """Start the HealthBand lifecycle."""
+        """Start HealthBand."""
 
         if self._started:
             raise RuntimeError(
@@ -135,16 +218,17 @@ class DeviceController:
         )
 
         await (
-            self._complete_module1_connection_stage()
+            self._complete_local_connection_stage()
         )
 
         await self._transition_to(
             DeviceState.MONITORING,
-            "Module 2 local monitoring mode started.",
+            "Module 3 local monitoring mode started.",
         )
 
-        # Produce the first measurement immediately.
         await self._read_sensors()
+
+        await self._create_health_report()
 
         self.scheduler.add_periodic_job(
             name="sensor-reading",
@@ -152,6 +236,16 @@ class DeviceController:
                 self.MEASUREMENT_INTERVAL_SEC
             ),
             callback=self._read_sensors,
+        )
+
+        self.scheduler.add_periodic_job(
+            name="device-health",
+            interval_sec=(
+                self.HEALTH_REPORT_INTERVAL_SEC
+            ),
+            callback=(
+                self._create_health_report
+            ),
         )
 
         self.scheduler.add_periodic_job(
@@ -163,12 +257,11 @@ class DeviceController:
         await self.scheduler.start()
 
         logger.info(
-            "HealthBand core and simulated sensors "
-            "started successfully."
+            "HealthBand Module 3 started successfully."
         )
 
     async def shutdown(self) -> None:
-        """Perform controlled HealthBand shutdown."""
+        """Perform controlled shutdown."""
 
         logger.info(
             "Controlled HealthBand shutdown requested."
@@ -204,9 +297,9 @@ class DeviceController:
         scenario: SimulationScenario,
         failed_sensor_name: str | None = None,
     ) -> None:
-        """Change active simulation scenario."""
+        """Change simulation scenario."""
 
-        previous_scenario = (
+        previous = (
             self.scenario_engine.current_scenario
         )
 
@@ -220,29 +313,31 @@ class DeviceController:
         logger.info(
             "Simulation scenario changed: "
             "%s -> %s.",
-            previous_scenario.value,
+            previous.value,
             scenario.value,
         )
 
     async def read_sensors_now(
         self,
     ) -> SensorSnapshot:
-        """Immediately perform a sensor measurement cycle."""
+        """Immediately execute one sampling cycle."""
 
         return await self._read_sensors()
+
+    async def create_health_report_now(
+        self,
+    ) -> DeviceHealthReport:
+        """Immediately create a health report."""
+
+        return await self._create_health_report()
 
     async def _run_core_self_test(
         self,
     ) -> None:
-        """
-        Execute the Module 2 core self-test.
-
-        Database, certificates and cloud connectivity are
-        intentionally checked in later modules.
-        """
+        """Run local Module 3 self-test."""
 
         logger.info(
-            "Running Module 2 core self-test."
+            "Running Module 3 core self-test."
         )
 
         checks = {
@@ -261,6 +356,16 @@ class DeviceController:
             "sensor_manager": (
                 self.sensor_manager is not None
             ),
+            "analytics_manager": (
+                self.analytics_manager is not None
+            ),
+            "alert_manager": (
+                self.alert_manager is not None
+            ),
+            "device_health_monitor": (
+                self.device_health_monitor
+                is not None
+            ),
             "device_id": bool(
                 self.device_id.strip()
             ),
@@ -269,7 +374,7 @@ class DeviceController:
             ),
         }
 
-        failed_checks = [
+        failed = [
             name
             for name, passed
             in checks.items()
@@ -278,7 +383,7 @@ class DeviceController:
 
         await asyncio.sleep(0.1)
 
-        if failed_checks:
+        if failed:
             await self._transition_to(
                 DeviceState.ERROR,
                 "Core self-test failed.",
@@ -286,22 +391,17 @@ class DeviceController:
 
             raise RuntimeError(
                 "Core self-test failed: "
-                + ", ".join(failed_checks)
+                + ", ".join(failed)
             )
 
         logger.info(
-            "Module 2 core self-test passed."
+            "Module 3 core self-test passed."
         )
 
-    async def _complete_module1_connection_stage(
+    async def _complete_local_connection_stage(
         self,
     ) -> None:
-        """
-        Represent CONNECTING during local development.
-
-        Real AWS IoT Core connectivity is intentionally
-        implemented later in the AWS communication module.
-        """
+        """Represent CONNECTING before AWS integration."""
 
         logger.info(
             "CONNECTING state entered."
@@ -309,8 +409,7 @@ class DeviceController:
 
         logger.info(
             "AWS IoT connection is intentionally "
-            "deferred until the AWS communication "
-            "module."
+            "deferred until Module 4."
         )
 
         await asyncio.sleep(0.2)
@@ -318,7 +417,7 @@ class DeviceController:
     async def _read_sensors(
         self,
     ) -> SensorSnapshot:
-        """Perform one complete sensor sampling cycle."""
+        """Read sensors, evaluate alerts and run analytics."""
 
         context = (
             self.scenario_engine.get_context()
@@ -374,14 +473,143 @@ class DeviceController:
             },
         )
 
+        alerts = (
+            self.alert_manager.evaluate_snapshot(
+                snapshot
+            )
+        )
+
+        for alert in alerts:
+            self._publish_alert(
+                alert
+            )
+
+        analytics_result = (
+            self.analytics_manager.add_snapshot(
+                snapshot=snapshot,
+                elapsed_sec=(
+                    self.MEASUREMENT_INTERVAL_SEC
+                ),
+                alerts_generated=len(
+                    alerts
+                ),
+            )
+        )
+
+        if analytics_result is not None:
+            self.latest_analytics = (
+                analytics_result
+            )
+
+            logger.info(
+                "Analytics completed | %s",
+                analytics_result.analytics,
+            )
+
+            self.event_bus.publish(
+                self.ANALYTICS_EVENT,
+                analytics_result.to_dict(),
+            )
+
         return snapshot
+
+    def _publish_alert(
+        self,
+        alert: Alert,
+    ) -> None:
+        """Log and publish one local alert."""
+
+        logger.warning(
+            "Alert generated | "
+            "type=%s | severity=%s | "
+            "scenario=%s | measured=%s",
+            alert.type.value,
+            alert.severity.value,
+            alert.scenario,
+            alert.measured_value,
+        )
+
+        if (
+            alert.severity
+            == AlertSeverity.HIGH
+        ):
+            self.device_health_monitor.record_fault(
+                alert.type.value
+            )
+
+        self.event_bus.publish(
+            self.ALERT_EVENT,
+            alert.to_dict(),
+        )
+
+    async def _create_health_report(
+        self,
+    ) -> DeviceHealthReport:
+        """Create technical HealthBand health report."""
+
+        sensor_statuses = (
+            self.sensor_manager.sensor_statuses()
+        )
+
+        battery_percentage: (
+            float | None
+        ) = None
+
+        if self.latest_snapshot is not None:
+            value = (
+                self.latest_snapshot.measurements.get(
+                    "batteryPercentage"
+                )
+            )
+
+            if value is not None:
+                battery_percentage = float(
+                    value
+                )
+
+        report = (
+            self.device_health_monitor.create_report(
+                device_state=(
+                    self.current_state
+                ),
+                sensor_statuses=(
+                    sensor_statuses
+                ),
+                battery_percentage=(
+                    battery_percentage
+                ),
+                mqtt_connected=None,
+                offline_queue_size=0,
+            )
+        )
+
+        self.latest_health_report = report
+
+        logger.info(
+            "Device health | "
+            "status=%s | "
+            "state=%s | "
+            "battery=%s | "
+            "sensors=%s",
+            report.device_status.value,
+            report.device_state.value,
+            report.battery_percentage,
+            report.sensors,
+        )
+
+        self.event_bus.publish(
+            self.DEVICE_HEALTH_EVENT,
+            report.to_dict(),
+        )
+
+        return report
 
     async def _transition_to(
         self,
         new_state: DeviceState,
         reason: str,
     ) -> StateTransition:
-        """Perform and publish a device state transition."""
+        """Perform and publish a state transition."""
 
         transition = (
             self.state_machine.transition_to(
@@ -425,7 +653,7 @@ class DeviceController:
     async def _log_core_status(
         self,
     ) -> None:
-        """Write a periodic local status message."""
+        """Log periodic controller status."""
 
         logger.info(
             "Core status | "
