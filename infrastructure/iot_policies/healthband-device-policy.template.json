@@ -1,0 +1,42 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ConnectAsOwnThing",
+      "Effect": "Allow",
+      "Action": "iot:Connect",
+      "Resource": "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:client/${iot:Connection.Thing.ThingName}",
+      "Condition": {
+        "Bool": {
+          "iot:Connection.Thing.IsAttached": "true"
+        }
+      }
+    },
+    {
+      "Sid": "PublishOwnHealthBandData",
+      "Effect": "Allow",
+      "Action": "iot:Publish",
+      "Resource": [
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/telemetry",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/analytics",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/alerts",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/health",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/events",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/commands/response",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/presence"
+      ]
+    },
+    {
+      "Sid": "SubscribeToOwnCommands",
+      "Effect": "Allow",
+      "Action": "iot:Subscribe",
+      "Resource": "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/${iot:Connection.Thing.ThingName}/commands/request"
+    },
+    {
+      "Sid": "ReceiveOwnCommands",
+      "Effect": "Allow",
+      "Action": "iot:Receive",
+      "Resource": "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/commands/request"
+    }
+  ]
+}

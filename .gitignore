@@ -47,3 +47,6 @@ ota_artifacts/*.zip
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Generated local AWS policy files
+infrastructure/iot_policies/*.local.json
