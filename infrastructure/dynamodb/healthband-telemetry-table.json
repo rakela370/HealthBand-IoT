@@ -1,0 +1,38 @@
+{
+  "TableName": "HealthBandTelemetry",
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "deviceId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "timestamp",
+      "AttributeType": "S"
+    }
+  ],
+  "KeySchema": [
+    {
+      "AttributeName": "deviceId",
+      "KeyType": "HASH"
+    },
+    {
+      "AttributeName": "timestamp",
+      "KeyType": "RANGE"
+    }
+  ],
+  "BillingMode": "PAY_PER_REQUEST",
+  "Tags": [
+    {
+      "Key": "Project",
+      "Value": "HealthBand"
+    },
+    {
+      "Key": "Environment",
+      "Value": "Development"
+    },
+    {
+      "Key": "DataType",
+      "Value": "Telemetry"
+    }
+  ]
+}

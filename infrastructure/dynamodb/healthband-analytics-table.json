@@ -1,0 +1,38 @@
+{
+  "TableName": "HealthBandAnalytics",
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "deviceId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "windowEnd",
+      "AttributeType": "S"
+    }
+  ],
+  "KeySchema": [
+    {
+      "AttributeName": "deviceId",
+      "KeyType": "HASH"
+    },
+    {
+      "AttributeName": "windowEnd",
+      "KeyType": "RANGE"
+    }
+  ],
+  "BillingMode": "PAY_PER_REQUEST",
+  "Tags": [
+    {
+      "Key": "Project",
+      "Value": "HealthBand"
+    },
+    {
+      "Key": "Environment",
+      "Value": "Development"
+    },
+    {
+      "Key": "DataType",
+      "Value": "Analytics"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "sql": "SELECT * FROM 'healthband/+/analytics'",
+  "description": "Stores HealthBand local analytics in DynamoDB.",
+  "actions": [
+    {
+      "dynamoDBv2": {
+        "roleArn": "YOUR_IOT_RULE_ROLE_ARN",
+        "putItem": {
+          "tableName": "HealthBandAnalytics"
+        }
+      }
+    }
+  ],
+  "ruleDisabled": false,
+  "awsIotSqlVersion": "2016-03-23"
+}

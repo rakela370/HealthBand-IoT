@@ -1,0 +1,16 @@
+{
+  "sql": "SELECT *, concat(timestamp, '-', messageId) AS timestampEventId, 'ALERT' AS recordType FROM 'healthband/+/alerts'",
+  "description": "Stores HealthBand alerts in the shared events table.",
+  "actions": [
+    {
+      "dynamoDBv2": {
+        "roleArn": "YOUR_IOT_RULE_ROLE_ARN",
+        "putItem": {
+          "tableName": "HealthBandEvents"
+        }
+      }
+    }
+  ],
+  "ruleDisabled": false,
+  "awsIotSqlVersion": "2016-03-23"
+}

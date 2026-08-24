@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WriteHealthBandDynamoDBTables",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:eu-central-1:YOUR_AWS_ACCOUNT_ID:table/HealthBandTelemetry",
+        "arn:aws:dynamodb:eu-central-1:YOUR_AWS_ACCOUNT_ID:table/HealthBandAnalytics",
+        "arn:aws:dynamodb:eu-central-1:YOUR_AWS_ACCOUNT_ID:table/HealthBandEvents"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "TableName": "HealthBandEvents",
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "deviceId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "timestampEventId",
+      "AttributeType": "S"
+    }
+  ],
+  "KeySchema": [
+    {
+      "AttributeName": "deviceId",
+      "KeyType": "HASH"
+    },
+    {
+      "AttributeName": "timestampEventId",
+      "KeyType": "RANGE"
+    }
+  ],
+  "BillingMode": "PAY_PER_REQUEST",
+  "Tags": [
+    {
+      "Key": "Project",
+      "Value": "HealthBand"
+    },
+    {
+      "Key": "Environment",
+      "Value": "Development"
+    },
+    {
+      "Key": "DataType",
+      "Value": "Events"
+    }
+  ]
+}

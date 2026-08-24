@@ -50,3 +50,6 @@ desktop.ini
 
 # Generated local AWS policy files
 infrastructure/iot_policies/*.local.json
+
+# Generated local AWS IoT Rule files
+infrastructure/iot_rules/*.local.json
