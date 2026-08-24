@@ -13,30 +13,31 @@
       }
     },
     {
-      "Sid": "PublishOwnHealthBandData",
+      "Sid": "PublishHealthBandDataAndShadows",
       "Effect": "Allow",
       "Action": "iot:Publish",
       "Resource": [
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/telemetry",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/analytics",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/alerts",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/health",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/events",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/commands/response",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/presence"
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/*",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/$aws/things/${iot:Connection.Thing.ThingName}/shadow/*"
       ]
     },
     {
-      "Sid": "SubscribeToOwnCommands",
+      "Sid": "SubscribeToCommandsAndShadows",
       "Effect": "Allow",
       "Action": "iot:Subscribe",
-      "Resource": "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/${iot:Connection.Thing.ThingName}/commands/request"
+      "Resource": [
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/${iot:Connection.Thing.ThingName}/commands/request",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/$aws/things/${iot:Connection.Thing.ThingName}/shadow/*"
+      ]
     },
     {
-      "Sid": "ReceiveOwnCommands",
+      "Sid": "ReceiveCommandsAndShadows",
       "Effect": "Allow",
       "Action": "iot:Receive",
-      "Resource": "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/commands/request"
+      "Resource": [
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/${iot:Connection.Thing.ThingName}/commands/request",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/$aws/things/${iot:Connection.Thing.ThingName}/shadow/*"
+      ]
     }
   ]
 }

@@ -1,4 +1,4 @@
-"""MQTT integration-style unit tests for DeviceController."""
+"""MQTT tests for DeviceController."""
 
 from typing import Any
 
@@ -19,9 +19,11 @@ from device_simulator.core.scheduler import (
 
 
 class FakeMqttClient:
-    """In-memory MQTT replacement used only by unit tests."""
+    """In-memory MQTT replacement."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+    ) -> None:
         self.connected = False
 
         self.subscriptions: list[
@@ -41,14 +43,26 @@ class FakeMqttClient:
         ] = []
 
     @property
-    def is_connected(self) -> bool:
-        return self.connected
+    def is_connected(
+        self,
+    ) -> bool:
+        return (
+            self.connected
+        )
 
-    def connect(self) -> None:
-        self.connected = True
+    def connect(
+        self,
+    ) -> None:
+        self.connected = (
+            True
+        )
 
-    def disconnect(self) -> None:
-        self.connected = False
+    def disconnect(
+        self,
+    ) -> None:
+        self.connected = (
+            False
+        )
 
     def subscribe(
         self,
@@ -82,7 +96,7 @@ class FakeMqttClient:
         self,
         maximum_items: int = 100,
     ) -> list[IncomingMqttMessage]:
-        messages = (
+        result = (
             self.incoming[
                 :maximum_items
             ]
@@ -92,7 +106,7 @@ class FakeMqttClient:
             :maximum_items
         ]
 
-        return messages
+        return result
 
 
 @pytest.mark.asyncio
@@ -110,10 +124,7 @@ async def test_controller_connects_and_publishes_cloud_data() -> None:
 
     await controller.start()
 
-    assert (
-        mqtt_client.connected
-        is True
-    )
+    assert mqtt_client.connected is True
 
     assert (
         (
@@ -151,14 +162,11 @@ async def test_controller_connects_and_publishes_cloud_data() -> None:
 
     await controller.shutdown()
 
-    assert (
-        mqtt_client.connected
-        is False
-    )
+    assert mqtt_client.connected is False
 
 
 @pytest.mark.asyncio
-async def test_received_command_gets_received_response() -> None:
+async def test_valid_command_gets_complete_status_flow() -> None:
     mqtt_client = (
         FakeMqttClient()
     )
@@ -180,12 +188,17 @@ async def test_received_command_gets_received_response() -> None:
                 .commands_request
             ),
             payload={
+                "schemaVersion": 1,
                 "commandId": (
-                    "module4-test-001"
+                    "module5-test-001"
                 ),
-                "command": (
+                "deviceId": (
+                    "healthband-device-001"
+                ),
+                "type": (
                     "REQUEST_DEVICE_HEALTH"
                 ),
+                "parameters": {},
             },
             duplicate=False,
             retained=False,
@@ -201,24 +214,31 @@ async def test_received_command_gets_received_response() -> None:
         payload
         for topic, payload, _
         in mqtt_client.published
-        if topic
-        == controller
-        .mqtt_topics
-        .commands_response
+        if (
+            topic
+            == controller
+            .mqtt_topics
+            .commands_response
+        )
     ]
 
-    assert len(
-        responses
-    ) == 1
+    statuses = [
+        response[
+            "status"
+        ]
+        for response in responses
+        if (
+            response[
+                "commandId"
+            ]
+            == "module5-test-001"
+        )
+    ]
 
-    assert (
-        responses[0]["commandId"]
-        == "module4-test-001"
-    )
-
-    assert (
-        responses[0]["status"]
-        == "RECEIVED"
-    )
+    assert statuses == [
+        "RECEIVED",
+        "IN_PROGRESS",
+        "SUCCEEDED",
+    ]
 
     await controller.shutdown()

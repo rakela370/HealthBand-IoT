@@ -1,0 +1,24 @@
+{
+  "measurementIntervalSec": 2.0,
+  "telemetryIntervalSec": 2.0,
+  "analyticsWindowSec": 10.0,
+  "healthReportIntervalSec": 5.0,
+  "temperatureUnit": "CELSIUS",
+  "thresholds": {
+    "heartRateMinimumBpm": 50.0,
+    "heartRateMaximumRestingBpm": 110.0,
+    "skinTemperatureMinimumC": 30.0,
+    "skinTemperatureMaximumC": 37.0,
+    "lowBatteryPercentage": 15.0
+  },
+  "alerts": {
+    "enabled": true,
+    "heartRate": true,
+    "temperature": true,
+    "battery": true,
+    "sensorFailure": true
+  },
+  "offlineQueueMaximumItems": 5000,
+  "activeUserProfile": "simulated-user-001",
+  "analyticsEnabled": true
+}

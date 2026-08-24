@@ -9,6 +9,9 @@ from device_simulator.communication.connection_manager import (
 from device_simulator.communication.mqtt_client import (
     MqttClient,
 )
+from device_simulator.communication.shadow_client import (
+    ShadowClient,
+)
 from device_simulator.core.device_controller import (
     DeviceController,
 )
@@ -29,7 +32,9 @@ logger = logging.getLogger(__name__)
 class HealthBandApplication:
     """Create and run the HealthBand simulator."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+    ) -> None:
         configure_logging()
 
         self.event_bus = (
@@ -37,12 +42,28 @@ class HealthBandApplication:
         )
 
         mqtt_settings = (
-            AwsIotConnectionSettings.from_environment()
+            AwsIotConnectionSettings
+            .from_environment()
         )
 
         self.mqtt_client = (
             MqttClient(
-                settings=mqtt_settings
+                settings=(
+                    mqtt_settings
+                )
+            )
+        )
+
+        self.shadow_client = (
+            ShadowClient(
+                thing_name=(
+                    mqtt_settings.client_id
+                ),
+                mqtt_connection=(
+                    self.mqtt_client
+                    .connection_manager
+                    .mqtt_connection
+                ),
             )
         )
 
@@ -52,8 +73,15 @@ class HealthBandApplication:
                     mqtt_settings.client_id
                 ),
                 software_version="1.0.0",
-                event_bus=self.event_bus,
-                mqtt_client=self.mqtt_client,
+                event_bus=(
+                    self.event_bus
+                ),
+                mqtt_client=(
+                    self.mqtt_client
+                ),
+                shadow_client=(
+                    self.shadow_client
+                ),
             )
         )
 
@@ -62,7 +90,9 @@ class HealthBandApplication:
             self._on_state_changed,
         )
 
-    async def run(self) -> None:
+    async def run(
+        self,
+    ) -> None:
         """Run simulator until interrupted."""
 
         try:
@@ -92,8 +122,6 @@ class HealthBandApplication:
         self,
         payload: dict[str, object],
     ) -> None:
-        """Receive local state-change events."""
-
         logger.debug(
             "State event received: %s",
             payload,
