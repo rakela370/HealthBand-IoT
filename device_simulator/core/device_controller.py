@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
+from time import monotonic
 from typing import Any
 from uuid import uuid4
 
@@ -34,6 +36,9 @@ from device_simulator.commands.command_registry import (
 from device_simulator.commands.command_validator import (
     CommandValidationError,
     CommandValidator,
+)
+from device_simulator.communication.message_serializer import (
+    prepare_message,
 )
 from device_simulator.communication.mqtt_client import (
     MqttClient,
@@ -86,6 +91,17 @@ from device_simulator.simulation.scenario_engine import (
 from device_simulator.simulation.user_profile import (
     UserProfile,
 )
+from device_simulator.storage.local_database import (
+    LocalDatabase,
+)
+from device_simulator.storage.offline_queue import (
+    OfflineMessageType,
+    OfflineQueue,
+)
+from device_simulator.storage.synchronization_manager import (
+    SynchronizationManager,
+    SynchronizationResult,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -104,6 +120,9 @@ class DeviceController:
     COMMAND_POLL_INTERVAL_SEC = 0.5
     SHADOW_POLL_INTERVAL_SEC = 0.5
     PRESENCE_INTERVAL_SEC = 10.0
+    CONNECTION_WATCH_INTERVAL_SEC = 1.0
+
+    RECONNECT_RETRY_INTERVAL_SEC = 5.0
 
     def __init__(
         self,
@@ -118,6 +137,10 @@ class DeviceController:
         configuration_manager: (
             ConfigurationManager | None
         ) = None,
+        offline_queue: OfflineQueue | None = None,
+        synchronization_manager: (
+            SynchronizationManager | None
+        ) = None,
     ) -> None:
         self.device_id = (
             device_id
@@ -128,11 +151,13 @@ class DeviceController:
         )
 
         self.event_bus = (
-            event_bus or EventBus()
+            event_bus
+            or EventBus()
         )
 
         self.scheduler = (
-            scheduler or Scheduler()
+            scheduler
+            or Scheduler()
         )
 
         self.state_machine = (
@@ -140,7 +165,8 @@ class DeviceController:
         )
 
         self.user_profile = (
-            user_profile or UserProfile()
+            user_profile
+            or UserProfile()
         )
 
         self.scenario_engine = (
@@ -154,7 +180,9 @@ class DeviceController:
                 user_profile=(
                     self.user_profile
                 ),
-                random_seed=random_seed,
+                random_seed=(
+                    random_seed
+                ),
             )
         )
 
@@ -169,7 +197,9 @@ class DeviceController:
 
         self.analytics_manager = (
             AnalyticsManager(
-                device_id=self.device_id,
+                device_id=(
+                    self.device_id
+                ),
                 software_version=(
                     self.software_version
                 ),
@@ -181,7 +211,9 @@ class DeviceController:
 
         self.alert_manager = (
             AlertManager(
-                device_id=self.device_id,
+                device_id=(
+                    self.device_id
+                ),
                 heart_rate_minimum_threshold=(
                     config.heart_rate_minimum_bpm
                 ),
@@ -202,7 +234,9 @@ class DeviceController:
 
         self.device_health_monitor = (
             DeviceHealthMonitor(
-                device_id=self.device_id,
+                device_id=(
+                    self.device_id
+                ),
                 software_version=(
                     self.software_version
                 ),
@@ -222,13 +256,65 @@ class DeviceController:
 
         self.mqtt_topics = (
             MqttTopics(
-                device_id=self.device_id
+                device_id=(
+                    self.device_id
+                )
             )
         )
 
+        if offline_queue is None:
+            database = (
+                LocalDatabase(
+                    Path.cwd()
+                    / "runtime"
+                    / "healthband.db"
+                )
+            )
+
+            self.offline_queue = (
+                OfflineQueue(
+                    database=database,
+                    maximum_items=(
+                        config.offline_queue_maximum_items
+                    ),
+                )
+            )
+
+        else:
+            self.offline_queue = (
+                offline_queue
+            )
+
+        if (
+            synchronization_manager
+            is not None
+        ):
+            self.synchronization_manager = (
+                synchronization_manager
+            )
+
+        elif self.mqtt_client is not None:
+            self.synchronization_manager = (
+                SynchronizationManager(
+                    offline_queue=(
+                        self.offline_queue
+                    ),
+                    mqtt_client=(
+                        self.mqtt_client
+                    ),
+                )
+            )
+
+        else:
+            self.synchronization_manager = (
+                None
+            )
+
         self.command_validator = (
             CommandValidator(
-                device_id=self.device_id
+                device_id=(
+                    self.device_id
+                )
             )
         )
 
@@ -262,11 +348,41 @@ class DeviceController:
             True
         )
 
-        self._started = False
+        self._started = (
+            False
+        )
 
         self._last_rejected_delta_signature: (
             str | None
         ) = None
+
+        self._simulated_outage_until: (
+            float | None
+        ) = None
+
+        self._manual_reconnect_needed = (
+            False
+        )
+
+        self._next_manual_reconnect_at = (
+            0.0
+        )
+
+        self._scenario_before_network_outage: (
+            SimulationScenario | None
+        ) = None
+
+        self._offline_queue_near_limit_alerted = (
+            False
+        )
+
+        self._reconnect_attempts = (
+            0
+        )
+
+        self._mqtt_send_failures = (
+            0
+        )
 
     @property
     def current_state(
@@ -295,7 +411,7 @@ class DeviceController:
     async def start(
         self,
     ) -> None:
-        """Start the HealthBand device."""
+        """Start HealthBand."""
 
         if self._started:
             raise RuntimeError(
@@ -337,6 +453,10 @@ class DeviceController:
             "AWS IoT connection stage completed.",
         )
 
+        await self._synchronize_offline_queue(
+            reason="STARTUP"
+        )
+
         await self._publish_presence(
             "ONLINE"
         )
@@ -360,7 +480,9 @@ class DeviceController:
             interval_sec=(
                 config.measurement_interval_sec
             ),
-            callback=self._scheduled_sensor_read,
+            callback=(
+                self._scheduled_sensor_read
+            ),
         )
 
         self.scheduler.add_periodic_job(
@@ -386,7 +508,9 @@ class DeviceController:
         self.scheduler.add_periodic_job(
             name="core-status",
             interval_sec=5.0,
-            callback=self._log_core_status,
+            callback=(
+                self._log_core_status
+            ),
         )
 
         if self.mqtt_client is not None:
@@ -410,6 +534,16 @@ class DeviceController:
                 ),
             )
 
+            self.scheduler.add_periodic_job(
+                name="connection-watch",
+                interval_sec=(
+                    self.CONNECTION_WATCH_INTERVAL_SEC
+                ),
+                callback=(
+                    self._connection_watch_tick
+                ),
+            )
+
         if self.shadow_client is not None:
             self.scheduler.add_periodic_job(
                 name="shadow-delta-poll",
@@ -424,7 +558,7 @@ class DeviceController:
         await self.scheduler.start()
 
         logger.info(
-            "HealthBand Module 5 started successfully."
+            "HealthBand Module 6 started successfully."
         )
 
     async def shutdown(
@@ -450,9 +584,9 @@ class DeviceController:
 
             except InvalidStateTransitionError:
                 logger.exception(
-                    "Unable to enter "
-                    "SHUTTING_DOWN state."
+                    "Unable to enter SHUTTING_DOWN state."
                 )
+
                 raise
 
         await self._publish_presence(
@@ -491,7 +625,9 @@ class DeviceController:
         )
 
         self.scenario_engine.set_scenario(
-            scenario=scenario,
+            scenario=(
+                scenario
+            ),
             failed_sensor_name=(
                 failed_sensor_name
             ),
@@ -506,7 +642,7 @@ class DeviceController:
     async def read_sensors_now(
         self,
     ) -> SensorSnapshot:
-        """Force an immediate sensor measurement."""
+        """Force immediate sensor reading."""
 
         snapshot = (
             await self._read_sensors(
@@ -519,7 +655,9 @@ class DeviceController:
                 "Immediate sensor reading failed."
             )
 
-        return snapshot
+        return (
+            snapshot
+        )
 
     async def create_health_report_now(
         self,
@@ -537,8 +675,6 @@ class DeviceController:
         self,
         delta: dict[str, Any],
     ) -> bool:
-        """Apply configuration directly; useful for testing."""
-
         result = (
             await self._apply_configuration_delta(
                 delta=delta,
@@ -550,11 +686,24 @@ class DeviceController:
             result.applied
         )
 
+    async def synchronize_offline_queue_now(
+        self,
+    ) -> SynchronizationResult | None:
+        """Force one queue synchronization pass."""
+
+        return (
+            await self._synchronize_offline_queue(
+                reason="MANUAL_TEST"
+            )
+        )
+
     async def _run_core_self_test(
         self,
     ) -> None:
+        """Run Module 6 self-test."""
+
         logger.info(
-            "Running Module 5 core self-test."
+            "Running Module 6 core self-test."
         )
 
         checks = {
@@ -580,13 +729,25 @@ class DeviceController:
                 self.alert_manager is not None
             ),
             "device_health_monitor": (
-                self.device_health_monitor is not None
+                self.device_health_monitor
+                is not None
             ),
             "configuration_manager": (
-                self.configuration_manager is not None
+                self.configuration_manager
+                is not None
             ),
             "command_handler": (
-                self.command_handler is not None
+                self.command_handler
+                is not None
+            ),
+            "offline_queue": (
+                self.offline_queue
+                is not None
+            ),
+            "local_database": (
+                self.offline_queue
+                .database
+                .ping()
             ),
             "device_id": bool(
                 self.device_id.strip()
@@ -598,7 +759,10 @@ class DeviceController:
 
         failed = [
             name
-            for name, passed
+            for (
+                name,
+                passed,
+            )
             in checks.items()
             if not passed
         ]
@@ -621,12 +785,14 @@ class DeviceController:
             )
 
         logger.info(
-            "Module 5 core self-test passed."
+            "Module 6 core self-test passed."
         )
 
     async def _connect_to_cloud(
         self,
     ) -> None:
+        """Initial AWS connection."""
+
         if self.mqtt_client is None:
             logger.info(
                 "No MQTT client supplied. "
@@ -655,7 +821,9 @@ class DeviceController:
                     self.shadow_client.start
                 )
 
-                await self._synchronize_shadow_on_startup()
+                await (
+                    self._synchronize_shadow_on_startup()
+                )
 
         except Exception as exc:
             self.device_health_monitor.record_fault(
@@ -663,8 +831,7 @@ class DeviceController:
             )
 
             logger.exception(
-                "Unable to initialize "
-                "AWS IoT communication."
+                "Unable to initialize AWS IoT communication."
             )
 
             await self._transition_to(
@@ -677,7 +844,7 @@ class DeviceController:
     async def _synchronize_shadow_on_startup(
         self,
     ) -> None:
-        """Get existing Shadow and create/update reported state."""
+        """Retrieve Shadow and reconcile desired/reported config."""
 
         if self.shadow_client is None:
             return
@@ -711,16 +878,22 @@ class DeviceController:
                     delta,
                 )
 
-                await self._apply_configuration_delta(
-                    delta=delta,
-                    source="SHADOW_STARTUP",
+                await (
+                    self._apply_configuration_delta(
+                        delta=delta,
+                        source=(
+                            "SHADOW_STARTUP"
+                        ),
+                    )
                 )
 
             else:
-                await self._report_configuration_applied(
-                    message=(
-                        "Current local configuration "
-                        "reported on startup."
+                await (
+                    self._report_configuration_applied(
+                        message=(
+                            "Current local configuration "
+                            "reported on startup."
+                        )
                     )
                 )
 
@@ -731,9 +904,11 @@ class DeviceController:
                     "Creating initial reported state."
                 )
 
-                await self._report_configuration_applied(
-                    message=(
-                        "Initial configuration reported."
+                await (
+                    self._report_configuration_applied(
+                        message=(
+                            "Initial configuration reported."
+                        )
                     )
                 )
 
@@ -751,11 +926,19 @@ class DeviceController:
         self,
         force: bool,
     ) -> SensorSnapshot | None:
+        """
+        Read sensors even when OFFLINE.
+
+        Network state deliberately does not stop local measurements.
+        """
+
         if (
             not self._monitoring_enabled
             and not force
         ):
-            return self.latest_snapshot
+            return (
+                self.latest_snapshot
+            )
 
         context = (
             self.scenario_engine.get_context()
@@ -777,8 +960,10 @@ class DeviceController:
 
         logger.info(
             "Sensor snapshot | "
-            "scenario=%s | activity=%s | "
-            "measurements=%s | status=%s",
+            "scenario=%s | "
+            "activity=%s | "
+            "measurements=%s | "
+            "status=%s",
             snapshot.scenario,
             snapshot.activity_level,
             snapshot.measurements,
@@ -788,7 +973,9 @@ class DeviceController:
         self.event_bus.publish(
             self.SENSOR_SNAPSHOT_EVENT,
             {
-                "deviceId": self.device_id,
+                "deviceId": (
+                    self.device_id
+                ),
                 "measurements": (
                     snapshot.measurements
                 ),
@@ -811,16 +998,21 @@ class DeviceController:
             Alert
         ] = []
 
-        if self.current_config.alerts_enabled:
+        if (
+            self.current_config
+            .alerts_enabled
+        ):
             alerts = (
-                self.alert_manager.evaluate_snapshot(
+                self.alert_manager
+                .evaluate_snapshot(
                     snapshot
                 )
             )
 
             alerts = [
                 alert
-                for alert in alerts
+                for alert
+                in alerts
                 if self._is_alert_enabled(
                     alert
                 )
@@ -831,21 +1023,30 @@ class DeviceController:
                 alert
             )
 
-        if self.current_config.analytics_enabled:
+        if (
+            self.current_config
+            .analytics_enabled
+        ):
             analytics_result = (
-                self.analytics_manager.add_snapshot(
+                self.analytics_manager
+                .add_snapshot(
                     snapshot=snapshot,
                     elapsed_sec=(
                         self.current_config
                         .measurement_interval_sec
                     ),
-                    alerts_generated=len(
-                        alerts
+                    alerts_generated=(
+                        len(
+                            alerts
+                        )
                     ),
                 )
             )
 
-            if analytics_result is not None:
+            if (
+                analytics_result
+                is not None
+            ):
                 self.latest_analytics = (
                     analytics_result
                 )
@@ -870,9 +1071,14 @@ class DeviceController:
                     ),
                     payload=payload,
                     qos=1,
+                    message_type=(
+                        OfflineMessageType.ANALYTICS
+                    ),
                 )
 
-        return snapshot
+        return (
+            snapshot
+        )
 
     async def _publish_latest_telemetry(
         self,
@@ -894,16 +1100,21 @@ class DeviceController:
         )
 
         await self._publish_mqtt(
-            topic=self.mqtt_topics.telemetry,
+            topic=(
+                self.mqtt_topics.telemetry
+            ),
             payload=payload,
             qos=0,
+            message_type=(
+                OfflineMessageType.TELEMETRY
+            ),
         )
 
     def _build_telemetry_payload(
         self,
         snapshot: SensorSnapshot,
     ) -> dict[str, Any]:
-        """Build external telemetry using configured unit."""
+        """Build externally visible telemetry."""
 
         measurements = dict(
             snapshot.measurements
@@ -916,7 +1127,10 @@ class DeviceController:
             )
         )
 
-        if temperature_celsius is not None:
+        if (
+            temperature_celsius
+            is not None
+        ):
             measurements[
                 "skinTemperature"
             ] = (
@@ -945,6 +1159,9 @@ class DeviceController:
             ),
             "softwareVersion": (
                 self.software_version
+            ),
+            "deviceState": (
+                self.current_state.value
             ),
             "scenario": (
                 snapshot.scenario
@@ -977,7 +1194,8 @@ class DeviceController:
             AlertType.HEART_RATE_ABOVE_RESTING_THRESHOLD,
         }:
             return (
-                config.heart_rate_alerts_enabled
+                config
+                .heart_rate_alerts_enabled
             )
 
         if alert.type in {
@@ -985,7 +1203,8 @@ class DeviceController:
             AlertType.TEMPERATURE_ABOVE_THRESHOLD,
         }:
             return (
-                config.temperature_alerts_enabled
+                config
+                .temperature_alerts_enabled
             )
 
         if (
@@ -993,7 +1212,8 @@ class DeviceController:
             == AlertType.LOW_BATTERY
         ):
             return (
-                config.battery_alerts_enabled
+                config
+                .battery_alerts_enabled
             )
 
         if alert.type in {
@@ -1002,18 +1222,23 @@ class DeviceController:
             AlertType.SENSOR_INVALID_VALUE,
         }:
             return (
-                config.sensor_failure_alerts_enabled
+                config
+                .sensor_failure_alerts_enabled
             )
 
-        return True
+        return (
+            True
+        )
 
     async def _publish_alert(
         self,
         alert: Alert,
     ) -> None:
         logger.warning(
-            "Alert generated | type=%s | "
-            "severity=%s | scenario=%s | "
+            "Alert generated | "
+            "type=%s | "
+            "severity=%s | "
+            "scenario=%s | "
             "measured=%s",
             alert.type.value,
             alert.severity.value,
@@ -1039,23 +1264,86 @@ class DeviceController:
         )
 
         await self._publish_mqtt(
-            self.mqtt_topics.alerts,
-            payload,
-            1,
+            topic=(
+                self.mqtt_topics.alerts
+            ),
+            payload=payload,
+            qos=1,
+            message_type=(
+                OfflineMessageType.ALERT
+            ),
+        )
+
+    async def _emit_system_alert(
+        self,
+        alert_type: AlertType,
+        severity: AlertSeverity,
+        message: str,
+        measured_value: Any = None,
+        configured_threshold: Any = None,
+    ) -> None:
+        """Create a non-sensor technical alert."""
+
+        alert = Alert(
+            alert_id=(
+                f"alert-{uuid4()}"
+            ),
+            device_id=(
+                self.device_id
+            ),
+            type=(
+                alert_type
+            ),
+            severity=(
+                severity
+            ),
+            timestamp=(
+                datetime.now(
+                    timezone.utc
+                )
+            ),
+            scenario=(
+                self.current_scenario.value
+            ),
+            activity_level=(
+                self.latest_snapshot.activity_level
+                if (
+                    self.latest_snapshot
+                    is not None
+                )
+                else "UNKNOWN"
+            ),
+            measured_value=(
+                measured_value
+            ),
+            configured_threshold=(
+                configured_threshold
+            ),
+            message=(
+                message
+            ),
+        )
+
+        await self._publish_alert(
+            alert
         )
 
     async def _create_health_report(
         self,
     ) -> DeviceHealthReport:
         statuses = (
-            self.sensor_manager.sensor_statuses()
+            self.sensor_manager
+            .sensor_statuses()
         )
 
         battery_percentage: (
             float | None
         ) = None
 
-        if self.latest_snapshot is not None:
+        if (
+            self.latest_snapshot
+            is not None
+        ):
             value = (
                 self.latest_snapshot
                 .measurements
@@ -1065,32 +1353,57 @@ class DeviceController:
             )
 
             if value is not None:
-                battery_percentage = float(
-                    value
+                battery_percentage = (
+                    float(
+                        value
+                    )
                 )
 
         mqtt_connected: (
             bool | None
         ) = None
 
-        if self.mqtt_client is not None:
+        if (
+            self.mqtt_client
+            is not None
+        ):
             mqtt_connected = (
-                self.mqtt_client.is_connected
+                self.mqtt_client
+                .is_connected
             )
 
+        queue_size = (
+            self._health_queue_size()
+        )
+
         report = (
-            self.device_health_monitor.create_report(
+            self.device_health_monitor
+            .create_report(
                 device_state=(
                     self.current_state
                 ),
-                sensor_statuses=statuses,
+                sensor_statuses=(
+                    statuses
+                ),
                 battery_percentage=(
                     battery_percentage
                 ),
                 mqtt_connected=(
                     mqtt_connected
                 ),
-                offline_queue_size=0,
+                offline_queue_size=(
+                    queue_size
+                ),
+                local_database_size_bytes=(
+                    self.offline_queue
+                    .database_size_bytes
+                ),
+                reconnect_attempts=(
+                    self._reconnect_attempts
+                ),
+                mqtt_send_failures=(
+                    self._mqtt_send_failures
+                ),
             )
         )
 
@@ -1099,12 +1412,17 @@ class DeviceController:
         )
 
         logger.info(
-            "Device health | status=%s | "
-            "state=%s | mqtt=%s | battery=%s",
+            "Device health | "
+            "status=%s | "
+            "state=%s | "
+            "mqtt=%s | "
+            "battery=%s | "
+            "offlineQueue=%s",
             report.device_status.value,
             report.device_state.value,
             report.mqtt_connected,
             report.battery_percentage,
+            report.offline_queue_size,
         )
 
         payload = (
@@ -1117,12 +1435,38 @@ class DeviceController:
         )
 
         await self._publish_mqtt(
-            self.mqtt_topics.health,
-            payload,
-            1,
+            topic=(
+                self.mqtt_topics.health
+            ),
+            payload=payload,
+            qos=1,
+            message_type=(
+                OfflineMessageType.HEALTH
+            ),
         )
 
-        return report
+        return (
+            report
+        )
+
+    def _health_queue_size(
+        self,
+    ) -> int:
+        """
+        Local-only unit tests do not represent an offline cloud device.
+
+        Therefore queue size contributes to technical health only when
+        a real/fake MQTT client is configured.
+        """
+
+        if self.mqtt_client is None:
+            return (
+                0
+            )
+
+        return (
+            self.offline_queue.size()
+        )
 
     async def _process_incoming_commands(
         self,
@@ -1138,13 +1482,15 @@ class DeviceController:
         for message in messages:
             if (
                 message.topic
-                != self.mqtt_topics.commands_request
+                != self.mqtt_topics
+                .commands_request
             ):
                 continue
 
             try:
                 command = (
-                    self.command_validator.validate(
+                    self.command_validator
+                    .validate(
                         message.payload
                     )
                 )
@@ -1182,28 +1528,40 @@ class DeviceController:
 
                 rejected = (
                     CommandResult(
-                        command_id=command_id,
-                        device_id=self.device_id,
-                        command_type=str(
-                            raw_type
+                        command_id=(
+                            command_id
+                        ),
+                        device_id=(
+                            self.device_id
+                        ),
+                        command_type=(
+                            str(
+                                raw_type
+                            )
                         ),
                         status=(
                             CommandStatus.REJECTED
                         ),
-                        message=str(
-                            exc
+                        message=(
+                            str(
+                                exc
+                            )
                         ),
                         error_code=(
                             "COMMAND_VALIDATION_FAILED"
                         ),
-                        timestamp=datetime.now(
-                            timezone.utc
+                        timestamp=(
+                            datetime.now(
+                                timezone.utc
+                            )
                         ),
                     )
                 )
 
-                await self._publish_command_result(
-                    rejected
+                await (
+                    self._publish_command_result(
+                        rejected
+                    )
                 )
 
                 continue
@@ -1222,8 +1580,10 @@ class DeviceController:
                     command.command_id,
                 )
 
-                await self._publish_command_result(
-                    cached
+                await (
+                    self._publish_command_result(
+                        cached
+                    )
                 )
 
                 continue
@@ -1245,7 +1605,8 @@ class DeviceController:
             )
 
             result = (
-                await self.command_handler.execute(
+                await self.command_handler
+                .execute(
                     command
                 )
             )
@@ -1254,27 +1615,56 @@ class DeviceController:
                 result
             )
 
+            if (
+                command.type
+                == CommandType.SIMULATE_NETWORK_OUTAGE
+                and result.status
+                == CommandStatus.SUCCEEDED
+            ):
+                duration = float(
+                    command.parameters.get(
+                        "durationSec",
+                        15.0,
+                    )
+                )
+
+                await (
+                    self._begin_simulated_network_outage(
+                        duration_sec=(
+                            duration
+                        )
+                    )
+                )
+
     def _transient_command_result(
         self,
         command: Command,
         status: CommandStatus,
         message: str,
     ) -> CommandResult:
-        return CommandResult(
-            command_id=(
-                command.command_id
-            ),
-            device_id=(
-                command.device_id
-            ),
-            command_type=(
-                command.type.value
-            ),
-            status=status,
-            message=message,
-            timestamp=datetime.now(
-                timezone.utc
-            ),
+        return (
+            CommandResult(
+                command_id=(
+                    command.command_id
+                ),
+                device_id=(
+                    command.device_id
+                ),
+                command_type=(
+                    command.type.value
+                ),
+                status=(
+                    status
+                ),
+                message=(
+                    message
+                ),
+                timestamp=(
+                    datetime.now(
+                        timezone.utc
+                    )
+                ),
+            )
         )
 
     async def _publish_command_result(
@@ -1282,8 +1672,11 @@ class DeviceController:
         result: CommandResult,
     ) -> None:
         logger.info(
-            "Command result | commandId=%s | "
-            "type=%s | status=%s | duplicate=%s",
+            "Command result | "
+            "commandId=%s | "
+            "type=%s | "
+            "status=%s | "
+            "duplicate=%s",
             result.command_id,
             result.command_type,
             result.status.value,
@@ -1292,12 +1685,17 @@ class DeviceController:
 
         await self._publish_mqtt(
             topic=(
-                self.mqtt_topics.commands_response
+                self.mqtt_topics
+                .commands_response
             ),
             payload=(
                 result.to_dict()
             ),
             qos=1,
+            message_type=(
+                OfflineMessageType
+                .COMMAND_RESPONSE
+            ),
         )
 
     def _register_commands(
@@ -1365,10 +1763,15 @@ class DeviceController:
     async def _command_start_monitoring(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
-        self._monitoring_enabled = True
+        self._monitoring_enabled = (
+            True
+        )
 
         if (
             self.current_state
@@ -1389,10 +1792,15 @@ class DeviceController:
     async def _command_stop_monitoring(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
-        self._monitoring_enabled = False
+        self._monitoring_enabled = (
+            False
+        )
 
         return (
             "Periodic sensor monitoring stopped.",
@@ -1404,7 +1812,10 @@ class DeviceController:
     async def _command_restart_device(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
         await self._transition_to(
@@ -1446,7 +1857,10 @@ class DeviceController:
     async def _command_enter_maintenance(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
         if (
@@ -1458,7 +1872,9 @@ class DeviceController:
                 "ENTER_MAINTENANCE command.",
             )
 
-        self._monitoring_enabled = False
+        self._monitoring_enabled = (
+            False
+        )
 
         return (
             "Maintenance mode entered.",
@@ -1472,7 +1888,10 @@ class DeviceController:
     async def _command_exit_maintenance(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
         if (
@@ -1484,7 +1903,9 @@ class DeviceController:
                 "EXIT_MAINTENANCE command.",
             )
 
-        self._monitoring_enabled = True
+        self._monitoring_enabled = (
+            True
+        )
 
         return (
             "Maintenance mode exited.",
@@ -1498,11 +1919,15 @@ class DeviceController:
     async def _command_start_charging(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
         battery = (
-            self.sensor_manager.get_sensor(
+            self.sensor_manager
+            .get_sensor(
                 "battery"
             )
         )
@@ -1527,11 +1952,15 @@ class DeviceController:
     async def _command_stop_charging(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
         battery = (
-            self.sensor_manager.get_sensor(
+            self.sensor_manager
+            .get_sensor(
                 "battery"
             )
         )
@@ -1556,7 +1985,10 @@ class DeviceController:
     async def _command_calibrate_sensor(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         sensor_name = (
             command.parameters[
                 "sensorName"
@@ -1564,7 +1996,8 @@ class DeviceController:
         )
 
         sensor = (
-            self.sensor_manager.get_sensor(
+            self.sensor_manager
+            .get_sensor(
                 sensor_name
             )
         )
@@ -1574,7 +2007,9 @@ class DeviceController:
         return (
             f"Sensor '{sensor_name}' calibrated.",
             {
-                "sensorName": sensor_name,
+                "sensorName": (
+                    sensor_name
+                ),
                 "sensorStatus": (
                     sensor.status.value
                 ),
@@ -1584,7 +2019,10 @@ class DeviceController:
     async def _command_request_measurement(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
         snapshot = (
@@ -1611,7 +2049,10 @@ class DeviceController:
     async def _command_request_device_health(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
         report = (
@@ -1630,7 +2071,10 @@ class DeviceController:
     async def _command_clear_alerts(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
 
         self.alert_manager.clear()
@@ -1643,7 +2087,10 @@ class DeviceController:
     async def _command_change_scenario(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         scenario = (
             SimulationScenario(
                 command.parameters[
@@ -1657,7 +2104,7 @@ class DeviceController:
         )
 
         return (
-            f"Simulation scenario changed "
+            "Simulation scenario changed "
             f"to {scenario.value}.",
             {
                 "scenario": (
@@ -1669,7 +2116,10 @@ class DeviceController:
     async def _command_simulate_sensor_failure(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         sensor_name = (
             command.parameters[
                 "sensorName"
@@ -1684,10 +2134,12 @@ class DeviceController:
         )
 
         return (
-            f"Sensor failure simulated "
+            "Sensor failure simulated "
             f"for '{sensor_name}'.",
             {
-                "sensorName": sensor_name,
+                "sensorName": (
+                    sensor_name
+                ),
                 "scenario": (
                     self.current_scenario.value
                 ),
@@ -1697,7 +2149,10 @@ class DeviceController:
     async def _command_restore_sensor(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         sensor_name = (
             command.parameters[
                 "sensorName"
@@ -1719,7 +2174,9 @@ class DeviceController:
         return (
             f"Sensor '{sensor_name}' restored.",
             {
-                "sensorName": sensor_name,
+                "sensorName": (
+                    sensor_name
+                ),
                 "sensorStatus": (
                     self.sensor_manager
                     .get_sensor(
@@ -1733,20 +2190,42 @@ class DeviceController:
     async def _command_simulate_network_outage(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
-        del command
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
+        duration = float(
+            command.parameters.get(
+                "durationSec",
+                15.0,
+            )
+        )
+
+        if (
+            self.current_scenario
+            != SimulationScenario.NETWORK_OUTAGE
+        ):
+            self._scenario_before_network_outage = (
+                self.current_scenario
+            )
 
         self.change_scenario(
             SimulationScenario.NETWORK_OUTAGE
         )
 
         return (
-            "NETWORK_OUTAGE simulation scenario activated. "
-            "Transport disconnection and offline queue behavior "
-            "are implemented in Module 6.",
+            "Simulated network outage scheduled.",
             {
                 "scenario": (
-                    self.current_scenario.value
+                    SimulationScenario
+                    .NETWORK_OUTAGE
+                    .value
+                ),
+                "durationSec": (
+                    duration
+                ),
+                "automaticReconnect": (
+                    True
                 ),
             },
         )
@@ -1754,44 +2233,646 @@ class DeviceController:
     async def _command_restore_network(
         self,
         command: Command,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[
+        str,
+        dict[str, Any],
+    ]:
         del command
+
+        self._simulated_outage_until = (
+            None
+        )
+
+        self._next_manual_reconnect_at = (
+            0.0
+        )
+
+        if (
+            self.current_scenario
+            == SimulationScenario.NETWORK_OUTAGE
+        ):
+            self._restore_pre_outage_scenario()
+
+        return (
+            "Network restoration requested.",
+            {
+                "automaticReconnect": True,
+            },
+        )
+
+    async def _begin_simulated_network_outage(
+        self,
+        duration_sec: float,
+    ) -> None:
+        """Perform an actual graceful MQTT disconnect for simulation."""
+
+        if self.mqtt_client is None:
+            return
+
+        self._simulated_outage_until = (
+            monotonic()
+            + duration_sec
+        )
+
+        self._manual_reconnect_needed = (
+            True
+        )
+
+        logger.warning(
+            "Starting simulated network outage | "
+            "durationSec=%s",
+            duration_sec,
+        )
+
+        if (
+            self.current_state
+            != DeviceState.OFFLINE
+        ):
+            await self._transition_to(
+                DeviceState.OFFLINE,
+                "Simulated network outage started.",
+            )
+
+        await asyncio.to_thread(
+            self.mqtt_client.disconnect
+        )
+
+        await self._emit_system_alert(
+            alert_type=(
+                AlertType.MQTT_DISCONNECTED
+            ),
+            severity=(
+                AlertSeverity.WARNING
+            ),
+            message=(
+                "MQTT connection to AWS IoT Core "
+                "is unavailable."
+            ),
+        )
+
+        logger.warning(
+            "HealthBand is OFFLINE. "
+            "Local sensing and analytics continue."
+        )
+
+    async def _connection_watch_tick(
+        self,
+    ) -> None:
+        """Monitor MQTT connectivity and coordinate recovery."""
+
+        if self.mqtt_client is None:
+            return
+
+        now = (
+            monotonic()
+        )
+
+        if self._manual_reconnect_needed:
+            if (
+                self._simulated_outage_until
+                is not None
+                and now
+                < self._simulated_outage_until
+            ):
+                return
+
+            if (
+                now
+                >= self._next_manual_reconnect_at
+            ):
+                await (
+                    self._attempt_manual_reconnect()
+                )
+
+            return
+
+        if not self.mqtt_client.is_connected:
+            if (
+                self.current_state
+                not in {
+                    DeviceState.OFFLINE,
+                    DeviceState.CONNECTING,
+                    DeviceState.ERROR,
+                    DeviceState.SHUTTING_DOWN,
+                }
+            ):
+                await (
+                    self._enter_offline_after_transport_loss()
+                )
+
+            return
+
+        if (
+            self.current_state
+            == DeviceState.OFFLINE
+        ):
+            await (
+                self._complete_automatic_reconnection()
+            )
+
+    async def _enter_offline_after_transport_loss(
+        self,
+    ) -> None:
+        """React to an unexpected connection interruption."""
+
+        if (
+            self.current_scenario
+            != SimulationScenario.NETWORK_OUTAGE
+        ):
+            self._scenario_before_network_outage = (
+                self.current_scenario
+            )
+
+            self.change_scenario(
+                SimulationScenario.NETWORK_OUTAGE
+            )
+
+        try:
+            await self._transition_to(
+                DeviceState.OFFLINE,
+                "MQTT connection to AWS IoT Core lost.",
+            )
+
+        except InvalidStateTransitionError:
+            logger.warning(
+                "Unable to enter OFFLINE from state %s.",
+                self.current_state.value,
+            )
+
+        await self._emit_system_alert(
+            alert_type=(
+                AlertType.MQTT_DISCONNECTED
+            ),
+            severity=(
+                AlertSeverity.WARNING
+            ),
+            message=(
+                "MQTT connection to AWS IoT Core "
+                "was interrupted."
+            ),
+        )
+
+    async def _attempt_manual_reconnect(
+        self,
+    ) -> None:
+        """Reconnect after an intentional simulated outage."""
+
+        if self.mqtt_client is None:
+            return
+
+        self._reconnect_attempts += 1
+
+        self._next_manual_reconnect_at = (
+            monotonic()
+            + self.RECONNECT_RETRY_INTERVAL_SEC
+        )
+
+        logger.info(
+            "Attempting MQTT reconnect | attempt=%s",
+            self._reconnect_attempts,
+        )
+
+        try:
+            if (
+                self.current_state
+                == DeviceState.OFFLINE
+            ):
+                await self._transition_to(
+                    DeviceState.CONNECTING,
+                    "Attempting AWS IoT reconnect.",
+                )
+
+            await asyncio.to_thread(
+                self.mqtt_client.connect
+            )
+
+            await asyncio.to_thread(
+                self.mqtt_client.resubscribe_all
+            )
+
+            if (
+                self.shadow_client
+                is not None
+            ):
+                await asyncio.to_thread(
+                    self.shadow_client.resubscribe
+                )
+
+                await (
+                    self._synchronize_shadow_on_startup()
+                )
+
+            self._manual_reconnect_needed = (
+                False
+            )
+
+            self._simulated_outage_until = (
+                None
+            )
+
+            await self._finish_reconnection(
+                reason=(
+                    "AWS IoT reconnect completed."
+                )
+            )
+
+        except Exception as exc:
+            logger.warning(
+                "MQTT reconnect attempt failed | "
+                "error=%s",
+                exc,
+            )
+
+            self.device_health_monitor.record_fault(
+                f"MQTT_RECONNECT_FAILED: {exc}"
+            )
+
+            if (
+                self.current_state
+                == DeviceState.CONNECTING
+            ):
+                await self._transition_to(
+                    DeviceState.OFFLINE,
+                    "AWS IoT reconnect failed.",
+                )
+
+    async def _complete_automatic_reconnection(
+        self,
+    ) -> None:
+        """Handle reconnect completed internally by AWS SDK."""
+
+        self._reconnect_attempts += 1
+
+        logger.info(
+            "MQTT connection is available again."
+        )
+
+        try:
+            if (
+                self.current_state
+                == DeviceState.OFFLINE
+            ):
+                await self._transition_to(
+                    DeviceState.CONNECTING,
+                    "MQTT connection resumed.",
+                )
+
+            await asyncio.to_thread(
+                self.mqtt_client.resubscribe_all
+            )
+
+            if (
+                self.shadow_client
+                is not None
+            ):
+                await asyncio.to_thread(
+                    self.shadow_client.resubscribe
+                )
+
+                await (
+                    self._synchronize_shadow_on_startup()
+                )
+
+            await self._finish_reconnection(
+                reason=(
+                    "MQTT connection automatically resumed."
+                )
+            )
+
+        except Exception as exc:
+            logger.exception(
+                "Post-reconnect initialization failed."
+            )
+
+            self.device_health_monitor.record_fault(
+                f"POST_RECONNECT_FAILED: {exc}"
+            )
+
+    async def _finish_reconnection(
+        self,
+        reason: str,
+    ) -> None:
+        """Complete state restoration and offline synchronization."""
+
+        if (
+            self.current_state
+            == DeviceState.CONNECTING
+        ):
+            await self._transition_to(
+                DeviceState.MONITORING,
+                reason,
+            )
+
+        self._restore_pre_outage_scenario()
+
+        await self._publish_presence(
+            "ONLINE"
+        )
+
+        await self._synchronize_offline_queue(
+            reason="RECONNECT"
+        )
+
+        await self._create_health_report()
+
+        logger.info(
+            "HealthBand returned ONLINE."
+        )
+
+    def _restore_pre_outage_scenario(
+        self,
+    ) -> None:
+        """Restore scenario active before network interruption."""
+
+        scenario = (
+            self._scenario_before_network_outage
+            or SimulationScenario.RESTING
+        )
 
         if (
             self.current_scenario
             == SimulationScenario.NETWORK_OUTAGE
         ):
             self.change_scenario(
-                SimulationScenario.RESTING
+                scenario
             )
 
-        return (
-            "Network simulation state restored.",
-            {
-                "scenario": (
-                    self.current_scenario.value
+        self._scenario_before_network_outage = (
+            None
+        )
+
+    async def _synchronize_offline_queue(
+        self,
+        reason: str,
+    ) -> SynchronizationResult | None:
+        """Synchronize persistent offline queue when MQTT is available."""
+
+        if (
+            self.synchronization_manager
+            is None
+            or self.mqtt_client
+            is None
+            or not self.mqtt_client.is_connected
+        ):
+            return (
+                None
+            )
+
+        before = (
+            self.offline_queue.size()
+        )
+
+        if before == 0:
+            return (
+                SynchronizationResult(
+                    attempted=0,
+                    sent=0,
+                    failed=0,
+                    remaining=0,
+                )
+            )
+
+        logger.info(
+            "Starting offline synchronization | "
+            "reason=%s | queued=%s",
+            reason,
+            before,
+        )
+
+        result = (
+            await asyncio.to_thread(
+                self.synchronization_manager
+                .synchronize,
+                1000,
+            )
+        )
+
+        logger.info(
+            "Offline synchronization completed | "
+            "attempted=%s | sent=%s | "
+            "failed=%s | remaining=%s",
+            result.attempted,
+            result.sent,
+            result.failed,
+            result.remaining,
+        )
+
+        if (
+            result.remaining
+            < (
+                self.offline_queue.maximum_items
+                * 0.5
+            )
+        ):
+            self._offline_queue_near_limit_alerted = (
+                False
+            )
+
+        await self._publish_mqtt(
+            topic=(
+                self.mqtt_topics.events
+            ),
+            payload={
+                "deviceId": (
+                    self.device_id
+                ),
+                "eventType": (
+                    "OFFLINE_SYNC_COMPLETED"
+                ),
+                "reason": (
+                    reason
+                ),
+                "attempted": (
+                    result.attempted
+                ),
+                "sent": (
+                    result.sent
+                ),
+                "failed": (
+                    result.failed
+                ),
+                "remaining": (
+                    result.remaining
+                ),
+                "timestamp": (
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat()
                 ),
             },
+            qos=1,
+            message_type=(
+                OfflineMessageType.EVENT
+            ),
+        )
+
+        return (
+            result
+        )
+
+    async def _enqueue_offline_message(
+        self,
+        message_type: OfflineMessageType,
+        topic: str,
+        payload: dict[str, Any],
+        qos: int,
+    ) -> None:
+        """Persist unsent MQTT message."""
+
+        result = (
+            await asyncio.to_thread(
+                self.offline_queue.enqueue,
+                message_type,
+                topic,
+                payload,
+                qos,
+            )
+        )
+
+        if result.inserted:
+            logger.info(
+                "MQTT message stored offline | "
+                "type=%s | "
+                "messageId=%s | "
+                "queueSize=%s",
+                message_type.value,
+                result.message_id,
+                result.queue_size,
+            )
+
+            if (
+                result.dropped_message_id
+                is not None
+            ):
+                logger.warning(
+                    "OfflineQueue evicted older "
+                    "lower-priority message | "
+                    "messageId=%s",
+                    result.dropped_message_id,
+                )
+
+        else:
+            logger.warning(
+                "MQTT message was not added "
+                "to OfflineQueue | "
+                "messageId=%s | reason=%s",
+                result.message_id,
+                result.reason,
+            )
+
+        if (
+            message_type
+            != OfflineMessageType.ALERT
+            and not self._offline_queue_near_limit_alerted
+            and self.offline_queue.is_near_limit()
+        ):
+            self._offline_queue_near_limit_alerted = (
+                True
+            )
+
+            await (
+                self._queue_near_limit_alert()
+            )
+
+    async def _queue_near_limit_alert(
+        self,
+    ) -> None:
+        """Persist one anti-spam alert when queue approaches its limit."""
+
+        queue_size = (
+            self.offline_queue.size()
+        )
+
+        alert = Alert(
+            alert_id=(
+                f"alert-{uuid4()}"
+            ),
+            device_id=(
+                self.device_id
+            ),
+            type=(
+                AlertType.OFFLINE_QUEUE_NEAR_LIMIT
+            ),
+            severity=(
+                AlertSeverity.WARNING
+            ),
+            timestamp=(
+                datetime.now(
+                    timezone.utc
+                )
+            ),
+            scenario=(
+                self.current_scenario.value
+            ),
+            activity_level=(
+                self.latest_snapshot.activity_level
+                if (
+                    self.latest_snapshot
+                    is not None
+                )
+                else "UNKNOWN"
+            ),
+            measured_value=(
+                queue_size
+            ),
+            configured_threshold=(
+                self.offline_queue.maximum_items
+            ),
+            message=(
+                "OfflineQueue is approaching "
+                "its configured capacity."
+            ),
+        )
+
+        self.event_bus.publish(
+            self.ALERT_EVENT,
+            alert.to_dict(),
+        )
+
+        await asyncio.to_thread(
+            self.offline_queue.enqueue,
+            OfflineMessageType.ALERT,
+            self.mqtt_topics.alerts,
+            alert.to_dict(),
+            1,
+        )
+
+        logger.warning(
+            "OFFLINE_QUEUE_NEAR_LIMIT alert queued | "
+            "size=%s | maximum=%s",
+            queue_size,
+            self.offline_queue.maximum_items,
         )
 
     async def _process_shadow_deltas(
         self,
     ) -> None:
-        if self.shadow_client is None:
+        if (
+            self.shadow_client
+            is None
+            or (
+                self.mqtt_client
+                is not None
+                and not self.mqtt_client.is_connected
+            )
+        ):
             return
 
         deltas = (
-            self.shadow_client.drain_deltas()
+            self.shadow_client
+            .drain_deltas()
         )
 
         for delta in deltas:
-            await self._apply_configuration_delta(
-                delta=(
-                    delta.state
-                ),
-                source=(
-                    f"SHADOW_DELTA_V{delta.version}"
-                ),
+            await (
+                self._apply_configuration_delta(
+                    delta=(
+                        delta.state
+                    ),
+                    source=(
+                        f"SHADOW_DELTA_V{delta.version}"
+                    ),
+                )
             )
 
     async def _apply_configuration_delta(
@@ -1800,16 +2881,19 @@ class DeviceController:
         source: str,
     ) -> ConfigurationApplyResult:
         result = (
-            self.configuration_manager.apply_delta(
+            self.configuration_manager
+            .apply_delta(
                 delta
             )
         )
 
         if not result.applied:
-            signature = json.dumps(
-                delta,
-                sort_keys=True,
-                default=str,
+            signature = (
+                json.dumps(
+                    delta,
+                    sort_keys=True,
+                    default=str,
+                )
             )
 
             logger.warning(
@@ -1827,21 +2911,27 @@ class DeviceController:
                     signature
                 )
 
-                await self._publish_configuration_event(
-                    status="REJECTED",
-                    source=source,
-                    errors=list(
-                        result.errors
-                    ),
-                )
-
-                await self._report_configuration_rejected(
-                    errors=list(
-                        result.errors
+                await (
+                    self._publish_configuration_event(
+                        status="REJECTED",
+                        source=source,
+                        errors=list(
+                            result.errors
+                        ),
                     )
                 )
 
-            return result
+                await (
+                    self._report_configuration_rejected(
+                        errors=list(
+                            result.errors
+                        )
+                    )
+                )
+
+            return (
+                result
+            )
 
         self._last_rejected_delta_signature = (
             None
@@ -1858,26 +2948,32 @@ class DeviceController:
             result.config.to_shadow_dict(),
         )
 
-        await self._publish_configuration_event(
-            status="APPLIED",
-            source=source,
-            errors=[],
-        )
-
-        await self._report_configuration_applied(
-            message=(
-                "Desired configuration validated "
-                "and applied."
+        await (
+            self._publish_configuration_event(
+                status="APPLIED",
+                source=source,
+                errors=[],
             )
         )
 
-        return result
+        await (
+            self._report_configuration_applied(
+                message=(
+                    "Desired configuration "
+                    "validated and applied."
+                )
+            )
+        )
+
+        return (
+            result
+        )
 
     def _apply_runtime_configuration(
         self,
         config: DeviceConfig,
     ) -> None:
-        """Apply configuration to running modules."""
+        """Apply configuration to live modules."""
 
         self.alert_manager.heart_rate_minimum_threshold = (
             config.heart_rate_minimum_bpm
@@ -1905,7 +3001,9 @@ class DeviceController:
 
         self.analytics_manager = (
             AnalyticsManager(
-                device_id=self.device_id,
+                device_id=(
+                    self.device_id
+                ),
                 software_version=(
                     self.software_version
                 ),
@@ -1913,6 +3011,10 @@ class DeviceController:
                     config.analytics_window_sec
                 ),
             )
+        )
+
+        self.offline_queue.update_maximum_items(
+            config.offline_queue_maximum_items
         )
 
         self.scheduler.update_periodic_job_interval(
@@ -1943,9 +3045,15 @@ class DeviceController:
             "eventType": (
                 "CONFIGURATION_CHANGED"
             ),
-            "status": status,
-            "source": source,
-            "errors": errors,
+            "status": (
+                status
+            ),
+            "source": (
+                source
+            ),
+            "errors": (
+                errors
+            ),
             "timestamp": (
                 datetime.now(
                     timezone.utc
@@ -1959,25 +3067,42 @@ class DeviceController:
         )
 
         await self._publish_mqtt(
-            self.mqtt_topics.events,
-            payload,
-            1,
+            topic=(
+                self.mqtt_topics.events
+            ),
+            payload=(
+                payload
+            ),
+            qos=1,
+            message_type=(
+                OfflineMessageType.EVENT
+            ),
         )
 
     async def _report_configuration_applied(
         self,
         message: str,
     ) -> None:
-        if self.shadow_client is None:
+        if (
+            self.shadow_client is None
+            or (
+                self.mqtt_client
+                is not None
+                and not self.mqtt_client.is_connected
+            )
+        ):
             return
 
         reported = (
-            self.current_config.to_shadow_dict()
+            self.current_config
+            .to_shadow_dict()
         )
 
         reported[
             "softwareVersion"
-        ] = self.software_version
+        ] = (
+            self.software_version
+        )
 
         reported[
             "capabilities"
@@ -1989,8 +3114,12 @@ class DeviceController:
         reported[
             "configurationStatus"
         ] = {
-            "status": "APPLIED",
-            "message": message,
+            "status": (
+                "APPLIED"
+            ),
+            "message": (
+                message
+            ),
             "timestamp": (
                 datetime.now(
                     timezone.utc
@@ -2007,13 +3136,24 @@ class DeviceController:
         self,
         errors: list[str],
     ) -> None:
-        if self.shadow_client is None:
+        if (
+            self.shadow_client is None
+            or (
+                self.mqtt_client
+                is not None
+                and not self.mqtt_client.is_connected
+            )
+        ):
             return
 
         reported = {
             "configurationStatus": {
-                "status": "REJECTED",
-                "errors": errors,
+                "status": (
+                    "REJECTED"
+                ),
+                "errors": (
+                    errors
+                ),
                 "timestamp": (
                     datetime.now(
                         timezone.utc
@@ -2040,14 +3180,20 @@ class DeviceController:
         reason: str,
     ) -> StateTransition:
         transition = (
-            self.state_machine.transition_to(
-                new_state=new_state,
-                reason=reason,
+            self.state_machine
+            .transition_to(
+                new_state=(
+                    new_state
+                ),
+                reason=(
+                    reason
+                ),
             )
         )
 
         logger.info(
-            "Device state changed: %s -> %s | reason=%s",
+            "Device state changed: "
+            "%s -> %s | reason=%s",
             transition.previous_state.value,
             transition.current_state.value,
             transition.reason,
@@ -2083,22 +3229,43 @@ class DeviceController:
         )
 
         await self._publish_mqtt(
-            self.mqtt_topics.events,
-            payload,
-            1,
+            topic=(
+                self.mqtt_topics.events
+            ),
+            payload=(
+                payload
+            ),
+            qos=1,
+            message_type=(
+                OfflineMessageType.EVENT
+            ),
         )
 
-        return transition
+        return (
+            transition
+        )
 
     async def _publish_presence(
         self,
         status: str,
     ) -> None:
+        """
+        Presence is intentionally not stored in OfflineQueue.
+
+        Old heartbeat/presence messages are not useful after reconnect.
+        """
+
         await self._publish_mqtt(
-            self.mqtt_topics.presence,
-            {
-                "deviceId": self.device_id,
-                "status": status,
+            topic=(
+                self.mqtt_topics.presence
+            ),
+            payload={
+                "deviceId": (
+                    self.device_id
+                ),
+                "status": (
+                    status
+                ),
                 "deviceState": (
                     self.current_state.value
                 ),
@@ -2106,7 +3273,11 @@ class DeviceController:
                     self.software_version
                 ),
             },
-            1,
+            qos=1,
+            message_type=(
+                OfflineMessageType.OTHER
+            ),
+            queue_if_offline=False,
         )
 
     async def _publish_presence_heartbeat(
@@ -2121,36 +3292,99 @@ class DeviceController:
         topic: str,
         payload: dict[str, Any],
         qos: int,
+        message_type: OfflineMessageType,
+        queue_if_offline: bool = True,
     ) -> bool:
+        """
+        Publish immediately or persist locally if connection is absent.
+
+        messageId and timestamp are generated before the first attempt,
+        therefore synchronized retries preserve the original identity.
+        """
+
+        prepared = (
+            prepare_message(
+                payload
+            )
+        )
+
+        if self.mqtt_client is None:
+            return (
+                False
+            )
+
         if (
-            self.mqtt_client is None
-            or not self.mqtt_client.is_connected
+            self.mqtt_client
+            .is_connected
         ):
-            return False
+            try:
+                await asyncio.to_thread(
+                    self.mqtt_client.publish,
+                    topic,
+                    prepared,
+                    qos,
+                )
 
-        try:
-            await asyncio.to_thread(
-                self.mqtt_client.publish,
-                topic,
-                payload,
-                qos,
+                return (
+                    True
+                )
+
+            except Exception as exc:
+                self._mqtt_send_failures += 1
+
+                logger.warning(
+                    "MQTT publish failed | "
+                    "topic=%s | error=%s",
+                    topic,
+                    exc,
+                )
+
+                self.device_health_monitor.record_fault(
+                    "MQTT_PUBLISH_FAILED: "
+                    f"{topic}: {exc}"
+                )
+
+                if queue_if_offline:
+                    await (
+                        self._enqueue_offline_message(
+                            message_type=(
+                                message_type
+                            ),
+                            topic=(
+                                topic
+                            ),
+                            payload=(
+                                prepared
+                            ),
+                            qos=(
+                                qos
+                            ),
+                        )
+                    )
+
+                return (
+                    False
+                )
+
+        if queue_if_offline:
+            await self._enqueue_offline_message(
+                message_type=(
+                    message_type
+                ),
+                topic=(
+                    topic
+                ),
+                payload=(
+                    prepared
+                ),
+                qos=(
+                    qos
+                ),
             )
 
-            return True
-
-        except Exception as exc:
-            logger.error(
-                "MQTT publish failed | "
-                "topic=%s | error=%s",
-                topic,
-                exc,
-            )
-
-            self.device_health_monitor.record_fault(
-                f"MQTT_PUBLISH_FAILED: {topic}: {exc}"
-            )
-
-            return False
+        return (
+            False
+        )
 
     async def _log_core_status(
         self,
@@ -2159,15 +3393,23 @@ class DeviceController:
             bool | None
         ) = None
 
-        if self.mqtt_client is not None:
+        if (
+            self.mqtt_client
+            is not None
+        ):
             mqtt_connected = (
-                self.mqtt_client.is_connected
+                self.mqtt_client
+                .is_connected
             )
 
         logger.info(
-            "Core status | device=%s | "
-            "version=%s | state=%s | "
-            "scenario=%s | mqtt=%s | "
+            "Core status | "
+            "device=%s | "
+            "version=%s | "
+            "state=%s | "
+            "scenario=%s | "
+            "mqtt=%s | "
+            "offlineQueue=%s | "
             "measurementInterval=%s | "
             "telemetryInterval=%s | "
             "temperatureUnit=%s",
@@ -2176,7 +3418,24 @@ class DeviceController:
             self.current_state.value,
             self.current_scenario.value,
             mqtt_connected,
-            self.current_config.measurement_interval_sec,
-            self.current_config.telemetry_interval_sec,
-            self.current_config.temperature_unit.value,
+            (
+                self.offline_queue.size()
+                if (
+                    self.mqtt_client
+                    is not None
+                )
+                else 0
+            ),
+            (
+                self.current_config
+                .measurement_interval_sec
+            ),
+            (
+                self.current_config
+                .telemetry_interval_sec
+            ),
+            (
+                self.current_config
+                .temperature_unit.value
+            ),
         )

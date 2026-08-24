@@ -38,7 +38,7 @@ class CommandValidator:
         self,
         payload: dict[str, Any],
     ) -> Command:
-        """Validate an incoming MQTT command."""
+        """Validate one incoming MQTT command."""
 
         if not isinstance(
             payload,
@@ -99,8 +99,6 @@ class CommandValidator:
             )
         )
 
-        # Kept only for compatibility with the Module 4
-        # receive-only demonstration payload.
         if type_value is None:
             type_value = (
                 payload.get(
@@ -150,12 +148,16 @@ class CommandValidator:
             device_id=(
                 self.device_id
             ),
-            type=command_type,
+            type=(
+                command_type
+            ),
             parameters=dict(
                 parameters
             ),
-            received_at=datetime.now(
-                timezone.utc
+            received_at=(
+                datetime.now(
+                    timezone.utc
+                )
             ),
         )
 
@@ -210,4 +212,43 @@ class CommandValidator:
                             self._SENSORS
                         )
                     )
+                )
+
+        if (
+            command_type
+            == CommandType.SIMULATE_NETWORK_OUTAGE
+        ):
+            duration = (
+                parameters.get(
+                    "durationSec",
+                    15,
+                )
+            )
+
+            if (
+                isinstance(
+                    duration,
+                    bool,
+                )
+                or not isinstance(
+                    duration,
+                    (int, float),
+                )
+            ):
+                raise CommandValidationError(
+                    "durationSec must be numeric."
+                )
+
+            numeric_duration = float(
+                duration
+            )
+
+            if not (
+                5.0
+                <= numeric_duration
+                <= 300.0
+            ):
+                raise CommandValidationError(
+                    "durationSec must be between "
+                    "5 and 300 seconds."
                 )

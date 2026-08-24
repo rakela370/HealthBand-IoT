@@ -44,6 +44,10 @@ class DeviceHealthReport:
     battery_percentage: float | None
 
     offline_queue_size: int
+    local_database_size_bytes: int
+
+    reconnect_attempts: int
+    mqtt_send_failures: int
 
     sensors: dict[str, str]
 
@@ -57,12 +61,16 @@ class DeviceHealthReport:
 
     timestamp: datetime
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert the report into a serializable dictionary."""
+    def to_dict(
+        self,
+    ) -> dict[str, Any]:
+        """Convert report into serializable dictionary."""
 
         return {
             "schemaVersion": 1,
-            "deviceId": self.device_id,
+            "deviceId": (
+                self.device_id
+            ),
             "deviceStatus": (
                 self.device_status.value
             ),
@@ -72,7 +80,9 @@ class DeviceHealthReport:
             "softwareVersion": (
                 self.software_version
             ),
-            "uptimeSec": self.uptime_sec,
+            "uptimeSec": (
+                self.uptime_sec
+            ),
             "mqttConnected": (
                 self.mqtt_connected
             ),
@@ -82,7 +92,18 @@ class DeviceHealthReport:
             "offlineQueueSize": (
                 self.offline_queue_size
             ),
-            "sensors": self.sensors,
+            "localDatabaseSizeBytes": (
+                self.local_database_size_bytes
+            ),
+            "reconnectAttempts": (
+                self.reconnect_attempts
+            ),
+            "mqttSendFailures": (
+                self.mqtt_send_failures
+            ),
+            "sensors": (
+                self.sensors
+            ),
             "resources": {
                 "processCpuPercentage": (
                     self.process_cpu_percentage
@@ -123,14 +144,21 @@ class DeviceHealthMonitor:
         software_version: str,
         low_battery_threshold: float = 15.0,
     ) -> None:
-        self.device_id = device_id
-        self.software_version = software_version
+        self.device_id = (
+            device_id
+        )
+
+        self.software_version = (
+            software_version
+        )
 
         self.low_battery_threshold = (
             low_battery_threshold
         )
 
-        self._start_time = monotonic()
+        self._start_time = (
+            monotonic()
+        )
 
         self.resource_monitor = (
             ResourceMonitor()
@@ -148,8 +176,6 @@ class DeviceHealthMonitor:
         self,
         error: str,
     ) -> None:
-        """Record one technical fault."""
-
         self.fault_manager.record(
             error
         )
@@ -161,6 +187,9 @@ class DeviceHealthMonitor:
         battery_percentage: float | None,
         mqtt_connected: bool | None = None,
         offline_queue_size: int = 0,
+        local_database_size_bytes: int = 0,
+        reconnect_attempts: int = 0,
+        mqtt_send_failures: int = 0,
     ) -> DeviceHealthReport:
         """Create one technical device-health report."""
 
@@ -174,7 +203,10 @@ class DeviceHealthMonitor:
             DeviceHealthStatus.HEALTHY
         )
 
-        if device_state == DeviceState.ERROR:
+        if (
+            device_state
+            == DeviceState.ERROR
+        ):
             health_status = (
                 DeviceHealthStatus.UNHEALTHY
             )
@@ -183,10 +215,15 @@ class DeviceHealthMonitor:
             sensor_summary.failed_sensors
             or sensor_summary.degraded_sensors
             or (
-                battery_percentage is not None
+                battery_percentage
+                is not None
                 and battery_percentage
                 < self.low_battery_threshold
             )
+            or mqtt_connected is False
+            or offline_queue_size > 0
+            or device_state
+            == DeviceState.OFFLINE
         ):
             health_status = (
                 DeviceHealthStatus.DEGRADED
@@ -197,9 +234,15 @@ class DeviceHealthMonitor:
         )
 
         return DeviceHealthReport(
-            device_id=self.device_id,
-            device_status=health_status,
-            device_state=device_state,
+            device_id=(
+                self.device_id
+            ),
+            device_status=(
+                health_status
+            ),
+            device_state=(
+                device_state
+            ),
             software_version=(
                 self.software_version
             ),
@@ -207,12 +250,23 @@ class DeviceHealthMonitor:
                 monotonic()
                 - self._start_time
             ),
-            mqtt_connected=mqtt_connected,
+            mqtt_connected=(
+                mqtt_connected
+            ),
             battery_percentage=(
                 battery_percentage
             ),
             offline_queue_size=(
                 offline_queue_size
+            ),
+            local_database_size_bytes=(
+                local_database_size_bytes
+            ),
+            reconnect_attempts=(
+                reconnect_attempts
+            ),
+            mqtt_send_failures=(
+                mqtt_send_failures
             ),
             sensors=dict(
                 sensor_statuses
@@ -232,7 +286,9 @@ class DeviceHealthMonitor:
             last_error=(
                 self.fault_manager.last_error
             ),
-            timestamp=datetime.now(
-                timezone.utc
+            timestamp=(
+                datetime.now(
+                    timezone.utc
+                )
             ),
         )

@@ -75,95 +75,43 @@ class ShadowClient:
             Lock()
         )
 
-        self._started = False
+        self._started = (
+            False
+        )
 
     def start(
         self,
     ) -> None:
-        """Subscribe to delta and operation response topics."""
+        """Establish initial Shadow subscriptions."""
 
         if self._started:
             return
 
-        qos = (
-            mqtt.QoS.AT_LEAST_ONCE
+        self._subscribe_all()
+
+        self._started = (
+            True
         )
-
-        subscriptions = [
-            self._client.subscribe_to_shadow_delta_updated_events(
-                request=(
-                    iotshadow.ShadowDeltaUpdatedSubscriptionRequest(
-                        thing_name=(
-                            self.thing_name
-                        )
-                    )
-                ),
-                qos=qos,
-                callback=self._on_delta,
-            ),
-            self._client.subscribe_to_get_shadow_accepted(
-                request=(
-                    iotshadow.GetShadowSubscriptionRequest(
-                        thing_name=(
-                            self.thing_name
-                        )
-                    )
-                ),
-                qos=qos,
-                callback=(
-                    self._on_get_accepted
-                ),
-            ),
-            self._client.subscribe_to_get_shadow_rejected(
-                request=(
-                    iotshadow.GetShadowSubscriptionRequest(
-                        thing_name=(
-                            self.thing_name
-                        )
-                    )
-                ),
-                qos=qos,
-                callback=(
-                    self._on_get_rejected
-                ),
-            ),
-            self._client.subscribe_to_update_shadow_accepted(
-                request=(
-                    iotshadow.UpdateShadowSubscriptionRequest(
-                        thing_name=(
-                            self.thing_name
-                        )
-                    )
-                ),
-                qos=qos,
-                callback=(
-                    self._on_update_accepted
-                ),
-            ),
-            self._client.subscribe_to_update_shadow_rejected(
-                request=(
-                    iotshadow.UpdateShadowSubscriptionRequest(
-                        thing_name=(
-                            self.thing_name
-                        )
-                    )
-                ),
-                qos=qos,
-                callback=(
-                    self._on_update_rejected
-                ),
-            ),
-        ]
-
-        for future, _ in subscriptions:
-            future.result(
-                timeout=10
-            )
-
-        self._started = True
 
         logger.info(
             "Device Shadow subscriptions established "
+            "for thing '%s'.",
+            self.thing_name,
+        )
+
+    def resubscribe(
+        self,
+    ) -> None:
+        """Restore Shadow subscriptions after manual MQTT reconnect."""
+
+        self._subscribe_all()
+
+        self._started = (
+            True
+        )
+
+        logger.info(
+            "Device Shadow subscriptions restored "
             "for thing '%s'.",
             self.thing_name,
         )
@@ -322,7 +270,7 @@ class ShadowClient:
         self,
         maximum_items: int = 100,
     ) -> list[ShadowDelta]:
-        """Return currently queued Shadow delta events."""
+        """Return currently queued Shadow deltas."""
 
         deltas: list[
             ShadowDelta
@@ -344,21 +292,101 @@ class ShadowClient:
 
         return deltas
 
+    def _subscribe_all(
+        self,
+    ) -> None:
+        """Subscribe to all classic Shadow topics required by device."""
+
+        qos = (
+            mqtt.QoS.AT_LEAST_ONCE
+        )
+
+        subscriptions = [
+            self._client.subscribe_to_shadow_delta_updated_events(
+                request=(
+                    iotshadow.ShadowDeltaUpdatedSubscriptionRequest(
+                        thing_name=(
+                            self.thing_name
+                        )
+                    )
+                ),
+                qos=qos,
+                callback=self._on_delta,
+            ),
+            self._client.subscribe_to_get_shadow_accepted(
+                request=(
+                    iotshadow.GetShadowSubscriptionRequest(
+                        thing_name=(
+                            self.thing_name
+                        )
+                    )
+                ),
+                qos=qos,
+                callback=(
+                    self._on_get_accepted
+                ),
+            ),
+            self._client.subscribe_to_get_shadow_rejected(
+                request=(
+                    iotshadow.GetShadowSubscriptionRequest(
+                        thing_name=(
+                            self.thing_name
+                        )
+                    )
+                ),
+                qos=qos,
+                callback=(
+                    self._on_get_rejected
+                ),
+            ),
+            self._client.subscribe_to_update_shadow_accepted(
+                request=(
+                    iotshadow.UpdateShadowSubscriptionRequest(
+                        thing_name=(
+                            self.thing_name
+                        )
+                    )
+                ),
+                qos=qos,
+                callback=(
+                    self._on_update_accepted
+                ),
+            ),
+            self._client.subscribe_to_update_shadow_rejected(
+                request=(
+                    iotshadow.UpdateShadowSubscriptionRequest(
+                        thing_name=(
+                            self.thing_name
+                        )
+                    )
+                ),
+                qos=qos,
+                callback=(
+                    self._on_update_rejected
+                ),
+            ),
+        ]
+
+        for (
+            future,
+            _,
+        ) in subscriptions:
+            future.result(
+                timeout=10
+            )
+
     def _ensure_started(
         self,
     ) -> None:
         if not self._started:
             raise RuntimeError(
-                "ShadowClient.start() "
-                "must be called first."
+                "ShadowClient.start() must be called first."
             )
 
     def _on_delta(
         self,
         event: iotshadow.ShadowDeltaUpdatedEvent,
     ) -> None:
-        """Queue desired/reported delta without blocking SDK callback."""
-
         state = (
             event.state
             if isinstance(
@@ -391,8 +419,12 @@ class ShadowClient:
         response: iotshadow.GetShadowResponse,
     ) -> None:
         self._resolve_pending(
-            pending=self._pending_get,
-            token=response.client_token,
+            pending=(
+                self._pending_get
+            ),
+            token=(
+                response.client_token
+            ),
             value=response,
         )
 
@@ -401,14 +433,22 @@ class ShadowClient:
         response: iotshadow.ErrorResponse,
     ) -> None:
         self._resolve_pending(
-            pending=self._pending_get,
-            token=response.client_token,
-            value=ShadowOperationRejected(
-                code=response.code,
-                message=(
-                    response.message
-                    or "GetShadow rejected."
-                ),
+            pending=(
+                self._pending_get
+            ),
+            token=(
+                response.client_token
+            ),
+            value=(
+                ShadowOperationRejected(
+                    code=(
+                        response.code
+                    ),
+                    message=(
+                        response.message
+                        or "GetShadow rejected."
+                    ),
+                )
             ),
         )
 
@@ -417,8 +457,12 @@ class ShadowClient:
         response: iotshadow.UpdateShadowResponse,
     ) -> None:
         self._resolve_pending(
-            pending=self._pending_update,
-            token=response.client_token,
+            pending=(
+                self._pending_update
+            ),
+            token=(
+                response.client_token
+            ),
             value=response,
         )
 
@@ -427,14 +471,22 @@ class ShadowClient:
         response: iotshadow.ErrorResponse,
     ) -> None:
         self._resolve_pending(
-            pending=self._pending_update,
-            token=response.client_token,
-            value=ShadowOperationRejected(
-                code=response.code,
-                message=(
-                    response.message
-                    or "UpdateShadow rejected."
-                ),
+            pending=(
+                self._pending_update
+            ),
+            token=(
+                response.client_token
+            ),
+            value=(
+                ShadowOperationRejected(
+                    code=(
+                        response.code
+                    ),
+                    message=(
+                        response.message
+                        or "UpdateShadow rejected."
+                    ),
+                )
             ),
         )
 
@@ -467,6 +519,5 @@ class ShadowClient:
 
         except Exception:
             logger.exception(
-                "Unable to deliver Device Shadow "
-                "operation response."
+                "Unable to deliver Device Shadow response."
             )
