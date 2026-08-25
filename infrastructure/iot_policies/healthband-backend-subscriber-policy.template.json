@@ -1,0 +1,39 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BackendConnect",
+      "Effect": "Allow",
+      "Action": "iot:Connect",
+      "Resource": "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:client/healthband-control-backend"
+    },
+    {
+      "Sid": "BackendSubscribe",
+      "Effect": "Allow",
+      "Action": "iot:Subscribe",
+      "Resource": [
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/telemetry",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/analytics",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/alerts",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/health",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/events",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/commands/response",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/presence"
+      ]
+    },
+    {
+      "Sid": "BackendReceive",
+      "Effect": "Allow",
+      "Action": "iot:Receive",
+      "Resource": [
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/telemetry",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/analytics",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/alerts",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/health",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/events",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/commands/response",
+        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/presence"
+      ]
+    }
+  ]
+}
