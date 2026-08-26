@@ -1,0 +1,361 @@
+@keyframes pageFade {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+@keyframes heartBeat {
+
+    0% {
+        transform: scale(1);
+    }
+
+    18% {
+        transform: scale(1.18);
+    }
+
+    34% {
+        transform: scale(1);
+    }
+
+    48% {
+        transform: scale(1.1);
+    }
+
+    65% {
+        transform: scale(1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+
+}
+
+
+@keyframes activityFloat {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-8px);
+    }
+
+}
+
+
+@keyframes watchGlow {
+
+    0%,
+    100% {
+        box-shadow:
+            0 0 35px
+            rgba(88, 214, 199, 0.08);
+    }
+
+    50% {
+        box-shadow:
+            0 0 60px
+            rgba(88, 214, 199, 0.16);
+    }
+
+}
+
+
+.watch-stage {
+    position: relative;
+
+    min-height: 610px;
+
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+}
+
+.watch-strap {
+    width: 170px;
+    height: 165px;
+
+    background:
+        linear-gradient(
+            90deg,
+            #17232d,
+            #263743,
+            #17232d
+        );
+
+    border:
+        1px solid
+        rgba(255, 255, 255, 0.08);
+}
+
+.watch-strap-top {
+    margin-bottom: -28px;
+
+    border-radius:
+        55px
+        55px
+        20px
+        20px;
+}
+
+.watch-strap-bottom {
+    margin-top: -28px;
+
+    border-radius:
+        20px
+        20px
+        55px
+        55px;
+}
+
+.watch-body {
+    z-index: 2;
+
+    width: 290px;
+    height: 350px;
+
+    padding: 15px;
+
+    border:
+        2px solid
+        rgba(255, 255, 255, 0.15);
+
+    border-radius: 68px;
+
+    background:
+        linear-gradient(
+            145deg,
+            #2b3b46,
+            #111b23
+        );
+
+    animation:
+        watchGlow
+        3s
+        ease-in-out
+        infinite;
+}
+
+.watch-screen {
+    width: 100%;
+    height: 100%;
+
+    padding:
+        23px
+        22px;
+
+    border-radius: 53px;
+
+    background:
+        radial-gradient(
+            circle at 50% 25%,
+            rgba(88, 214, 199, 0.08),
+            transparent 40%
+        ),
+        #03080c;
+}
+
+.watch-top-row {
+    display: flex;
+    justify-content: space-between;
+
+    color: #79909e;
+
+    font-size: 11px;
+}
+
+.watch-heart {
+    margin-top: 38px;
+
+    color: var(--heart);
+
+    font-size: 55px;
+
+    text-align: center;
+
+    animation:
+        heartBeat
+        var(--heart-duration)
+        ease-in-out
+        infinite;
+}
+
+.watch-heart-rate {
+    margin-top: -4px;
+
+    font-size: 50px;
+    font-weight: 900;
+
+    text-align: center;
+
+    letter-spacing: -0.05em;
+}
+
+.watch-unit {
+    color: #718795;
+
+    text-align: center;
+    font-size: 11px;
+
+    letter-spacing: 0.16em;
+}
+
+.watch-bottom-grid {
+    display: grid;
+
+    grid-template-columns:
+        1fr
+        1fr;
+
+    gap: 10px;
+
+    margin-top: 29px;
+}
+
+.watch-bottom-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    padding: 9px;
+
+    border-radius: 12px;
+
+    background:
+        rgba(255, 255, 255, 0.035);
+}
+
+.watch-small-label {
+    color: #637985;
+
+    font-size: 9px;
+    text-transform: uppercase;
+}
+
+.watch-spo2 {
+    margin-top: 10px;
+
+    padding: 7px;
+
+    border-radius: 10px;
+
+    color: var(--blue);
+    background: var(--blue-soft);
+
+    text-align: center;
+
+    font-size: 11px;
+}
+
+.activity-panel {
+    min-height: 380px;
+
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+}
+
+.activity-symbol {
+    margin:
+        25px
+        0
+        4px;
+
+    color: var(--accent);
+
+    font-size: 90px;
+    line-height: 1;
+
+    animation:
+        activityFloat
+        2.4s
+        ease-in-out
+        infinite;
+}
+
+.battery-visual {
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    margin-top: 25px;
+}
+
+.battery-track {
+    flex: 1;
+
+    height: 10px;
+
+    overflow: hidden;
+
+    border-radius: 999px;
+
+    background:
+        rgba(255, 255, 255, 0.07);
+}
+
+.battery-fill {
+    width: 0;
+    height: 100%;
+
+    border-radius: inherit;
+
+    background:
+        linear-gradient(
+            90deg,
+            var(--accent),
+            var(--success)
+        );
+
+    transition:
+        width
+        500ms
+        ease;
+}
+
+.simulation-meta {
+    display: grid;
+
+    grid-template-columns:
+        1fr
+        1fr;
+
+    gap: 12px;
+
+    margin-top: 25px;
+}
+
+.simulation-meta > div {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+
+    padding: 12px;
+
+    border:
+        1px solid var(--border);
+
+    border-radius:
+        var(--radius-small);
+}
+
+.simulation-meta span {
+    color: var(--text-muted);
+
+    font-size: 10px;
+}

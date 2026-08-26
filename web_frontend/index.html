@@ -1,0 +1,1870 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>HealthBand IoT Dashboard</title>
+
+    <link
+        rel="stylesheet"
+        href="css/variables.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="css/layout.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="css/components.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="css/animations.css"
+    >
+</head>
+
+<body>
+
+<div class="app-shell">
+
+    <aside class="sidebar">
+
+        <div class="brand">
+
+            <div class="brand-mark">
+                HB
+            </div>
+
+            <div>
+                <div class="brand-title">
+                    HealthBand
+                </div>
+
+                <div class="brand-subtitle">
+                    IoT Control Center
+                </div>
+            </div>
+
+        </div>
+
+        <nav class="navigation">
+
+            <button
+                class="nav-item active"
+                data-page="dashboard"
+            >
+                <span class="nav-icon">⌂</span>
+                Dashboard
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="simulation"
+            >
+                <span class="nav-icon">◉</span>
+                Live Simulation
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="history"
+            >
+                <span class="nav-icon">⌁</span>
+                History
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="configuration"
+            >
+                <span class="nav-icon">⚙</span>
+                Configuration
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="commands"
+            >
+                <span class="nav-icon">›_</span>
+                Commands
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="health"
+            >
+                <span class="nav-icon">+</span>
+                Device Health
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="ota"
+            >
+                <span class="nav-icon">⇧</span>
+                OTA Update
+            </button>
+
+            <button
+                class="nav-item"
+                data-page="events"
+            >
+                <span class="nav-icon">≡</span>
+                Event Log
+            </button>
+
+        </nav>
+
+        <div class="sidebar-footer">
+
+            <div class="connection-indicator">
+
+                <span
+                    id="websocket-dot"
+                    class="status-dot status-dot-offline"
+                ></span>
+
+                <span id="websocket-label">
+                    Backend disconnected
+                </span>
+
+            </div>
+
+            <div class="sidebar-version">
+                Frontend v1.0
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <main class="main-content">
+
+        <header class="topbar">
+
+            <div>
+
+                <div
+                    id="page-eyebrow"
+                    class="eyebrow"
+                >
+                    HEALTHBAND DEVICE
+                </div>
+
+                <h1 id="page-title">
+                    Dashboard
+                </h1>
+
+            </div>
+
+            <div class="topbar-status">
+
+                <div class="device-identity">
+
+                    <span class="muted">
+                        Device
+                    </span>
+
+                    <strong>
+                        healthband-device-001
+                    </strong>
+
+                </div>
+
+                <span
+                    id="global-online-status"
+                    class="status-badge status-neutral"
+                >
+                    UNKNOWN
+                </span>
+
+            </div>
+
+        </header>
+
+
+        <div id="global-error" class="global-error hidden"></div>
+
+
+        <!-- DASHBOARD -->
+        <section
+            id="page-dashboard"
+            class="page-section active"
+        >
+
+            <div class="overview-grid">
+
+                <article class="overview-card">
+
+                    <div class="overview-label">
+                        Device State
+                    </div>
+
+                    <div
+                        id="dashboard-device-state"
+                        class="overview-value"
+                    >
+                        —
+                    </div>
+
+                    <div class="overview-foot">
+                        State machine
+                    </div>
+
+                </article>
+
+
+                <article class="overview-card">
+
+                    <div class="overview-label">
+                        Software
+                    </div>
+
+                    <div
+                        id="dashboard-software-version"
+                        class="overview-value"
+                    >
+                        —
+                    </div>
+
+                    <div class="overview-foot">
+                        Installed release
+                    </div>
+
+                </article>
+
+
+                <article class="overview-card">
+
+                    <div class="overview-label">
+                        Scenario
+                    </div>
+
+                    <div
+                        id="dashboard-scenario"
+                        class="overview-value"
+                    >
+                        —
+                    </div>
+
+                    <div class="overview-foot">
+                        Simulation context
+                    </div>
+
+                </article>
+
+
+                <article class="overview-card">
+
+                    <div class="overview-label">
+                        MQTT
+                    </div>
+
+                    <div
+                        id="dashboard-mqtt"
+                        class="overview-value"
+                    >
+                        —
+                    </div>
+
+                    <div class="overview-foot">
+                        AWS IoT Core
+                    </div>
+
+                </article>
+
+            </div>
+
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="eyebrow">
+                        LIVE TELEMETRY
+                    </div>
+
+                    <h2>
+                        Sensor readings
+                    </h2>
+                </div>
+
+                <div
+                    id="dashboard-last-update"
+                    class="muted"
+                >
+                    Čeka se telemetrija...
+                </div>
+
+            </div>
+
+
+            <div class="sensor-grid">
+
+                <article
+                    id="sensor-heart-card"
+                    class="sensor-card"
+                >
+
+                    <div class="sensor-card-top">
+                        <span class="sensor-symbol heart-symbol">
+                            ♥
+                        </span>
+
+                        <span
+                            id="sensor-heart-status"
+                            class="status-badge status-neutral"
+                        >
+                            —
+                        </span>
+                    </div>
+
+                    <div class="sensor-name">
+                        Heart Rate
+                    </div>
+
+                    <div class="sensor-reading">
+                        <span id="sensor-heart-value">
+                            —
+                        </span>
+
+                        <span class="sensor-unit">
+                            BPM
+                        </span>
+                    </div>
+
+                    <div class="sensor-footer">
+
+                        <span id="sensor-heart-trend">
+                            —
+                        </span>
+
+                        <span id="sensor-heart-time">
+                            —
+                        </span>
+
+                    </div>
+
+                </article>
+
+
+                <article
+                    id="sensor-temperature-card"
+                    class="sensor-card"
+                >
+
+                    <div class="sensor-card-top">
+                        <span class="sensor-symbol">
+                            ◐
+                        </span>
+
+                        <span
+                            id="sensor-temperature-status"
+                            class="status-badge status-neutral"
+                        >
+                            —
+                        </span>
+                    </div>
+
+                    <div class="sensor-name">
+                        Skin Temperature
+                    </div>
+
+                    <div class="sensor-reading">
+                        <span id="sensor-temperature-value">
+                            —
+                        </span>
+
+                        <span
+                            id="sensor-temperature-unit"
+                            class="sensor-unit"
+                        >
+                            —
+                        </span>
+                    </div>
+
+                    <div class="sensor-footer">
+
+                        <span id="sensor-temperature-trend">
+                            —
+                        </span>
+
+                        <span id="sensor-temperature-time">
+                            —
+                        </span>
+
+                    </div>
+
+                </article>
+
+
+                <article
+                    id="sensor-steps-card"
+                    class="sensor-card"
+                >
+
+                    <div class="sensor-card-top">
+                        <span class="sensor-symbol">
+                            ↗
+                        </span>
+
+                        <span
+                            id="sensor-steps-status"
+                            class="status-badge status-neutral"
+                        >
+                            —
+                        </span>
+                    </div>
+
+                    <div class="sensor-name">
+                        Daily Steps
+                    </div>
+
+                    <div class="sensor-reading">
+                        <span id="sensor-steps-value">
+                            —
+                        </span>
+
+                        <span class="sensor-unit">
+                            steps
+                        </span>
+                    </div>
+
+                    <div class="sensor-footer">
+
+                        <span id="sensor-steps-trend">
+                            —
+                        </span>
+
+                        <span id="sensor-steps-time">
+                            —
+                        </span>
+
+                    </div>
+
+                </article>
+
+
+                <article
+                    id="sensor-battery-card"
+                    class="sensor-card"
+                >
+
+                    <div class="sensor-card-top">
+                        <span class="sensor-symbol">
+                            ▰
+                        </span>
+
+                        <span
+                            id="sensor-battery-status"
+                            class="status-badge status-neutral"
+                        >
+                            —
+                        </span>
+                    </div>
+
+                    <div class="sensor-name">
+                        Battery
+                    </div>
+
+                    <div class="sensor-reading">
+                        <span id="sensor-battery-value">
+                            —
+                        </span>
+
+                        <span class="sensor-unit">
+                            %
+                        </span>
+                    </div>
+
+                    <div class="sensor-footer">
+
+                        <span id="sensor-battery-trend">
+                            —
+                        </span>
+
+                        <span id="sensor-battery-time">
+                            —
+                        </span>
+
+                    </div>
+
+                </article>
+
+
+                <article
+                    id="sensor-spo2-card"
+                    class="sensor-card hidden"
+                >
+
+                    <div class="sensor-card-top">
+
+                        <span class="sensor-symbol">
+                            O₂
+                        </span>
+
+                        <span
+                            id="sensor-spo2-status"
+                            class="status-badge status-neutral"
+                        >
+                            —
+                        </span>
+
+                    </div>
+
+                    <div class="sensor-name">
+                        Oxygen Saturation
+                    </div>
+
+                    <div class="sensor-reading">
+
+                        <span id="sensor-spo2-value">
+                            —
+                        </span>
+
+                        <span class="sensor-unit">
+                            %
+                        </span>
+
+                    </div>
+
+                    <div class="sensor-footer">
+
+                        <span id="sensor-spo2-trend">
+                            —
+                        </span>
+
+                        <span id="sensor-spo2-time">
+                            —
+                        </span>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+
+            <div class="dashboard-lower-grid">
+
+                <article class="panel">
+
+                    <div class="panel-heading">
+                        <div>
+                            <div class="eyebrow">
+                                ACTIVITY
+                            </div>
+
+                            <h3>
+                                Current activity
+                            </h3>
+                        </div>
+
+                        <span
+                            id="dashboard-activity"
+                            class="large-status"
+                        >
+                            —
+                        </span>
+                    </div>
+
+                    <div
+                        id="dashboard-activity-description"
+                        class="muted"
+                    >
+                        Čeka se podatak.
+                    </div>
+
+                </article>
+
+
+                <article class="panel">
+
+                    <div class="panel-heading">
+
+                        <div>
+                            <div class="eyebrow">
+                                LAST ALERT
+                            </div>
+
+                            <h3 id="dashboard-alert-title">
+                                No active alert
+                            </h3>
+                        </div>
+
+                        <span
+                            id="dashboard-alert-severity"
+                            class="status-badge status-ok"
+                        >
+                            OK
+                        </span>
+
+                    </div>
+
+                    <div
+                        id="dashboard-alert-message"
+                        class="muted"
+                    >
+                        Nije primljeno upozorenje.
+                    </div>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- LIVE SIMULATION -->
+        <section
+            id="page-simulation"
+            class="page-section"
+        >
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="eyebrow">
+                        DIGITAL TWIN
+                    </div>
+
+                    <h2>
+                        Live HealthBand Simulation
+                    </h2>
+                </div>
+
+                <span
+                    id="simulation-scenario"
+                    class="status-badge status-neutral"
+                >
+                    —
+                </span>
+
+            </div>
+
+
+            <div class="simulation-layout">
+
+                <div class="watch-stage">
+
+                    <div class="watch-strap watch-strap-top"></div>
+
+                    <div class="watch-body">
+
+                        <div class="watch-screen">
+
+                            <div class="watch-top-row">
+
+                                <span>
+                                    HealthBand
+                                </span>
+
+                                <span id="watch-battery">
+                                    — %
+                                </span>
+
+                            </div>
+
+                            <div
+                                id="watch-heart"
+                                class="watch-heart"
+                            >
+                                ♥
+                            </div>
+
+                            <div
+                                id="watch-heart-rate"
+                                class="watch-heart-rate"
+                            >
+                                —
+                            </div>
+
+                            <div class="watch-unit">
+                                BPM
+                            </div>
+
+                            <div class="watch-bottom-grid">
+
+                                <div>
+                                    <span class="watch-small-label">
+                                        Steps
+                                    </span>
+
+                                    <strong id="watch-steps">
+                                        —
+                                    </strong>
+                                </div>
+
+                                <div>
+                                    <span class="watch-small-label">
+                                        Activity
+                                    </span>
+
+                                    <strong id="watch-activity">
+                                        —
+                                    </strong>
+                                </div>
+
+                            </div>
+
+                            <div
+                                id="watch-spo2-row"
+                                class="watch-spo2 hidden"
+                            >
+                                SpO₂
+                                <strong id="watch-spo2">
+                                    —
+                                </strong>
+                                %
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="watch-strap watch-strap-bottom"></div>
+
+                </div>
+
+
+                <article class="activity-panel panel">
+
+                    <div class="eyebrow">
+                        ACTIVITY VISUALIZATION
+                    </div>
+
+                    <div
+                        id="activity-symbol"
+                        class="activity-symbol"
+                    >
+                        ◉
+                    </div>
+
+                    <h2 id="activity-name">
+                        Waiting
+                    </h2>
+
+                    <p
+                        id="activity-description"
+                        class="muted"
+                    >
+                        Čeka se realtime telemetrija.
+                    </p>
+
+                    <div class="battery-visual">
+
+                        <div class="battery-track">
+                            <div
+                                id="simulation-battery-fill"
+                                class="battery-fill"
+                            ></div>
+                        </div>
+
+                        <span id="simulation-battery-label">
+                            — %
+                        </span>
+
+                    </div>
+
+                    <div class="simulation-meta">
+
+                        <div>
+                            <span>
+                                Device state
+                            </span>
+
+                            <strong id="simulation-device-state">
+                                —
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>
+                                Last reading
+                            </span>
+
+                            <strong id="simulation-time">
+                                —
+                            </strong>
+                        </div>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- HISTORY -->
+        <section
+            id="page-history"
+            class="page-section"
+        >
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="eyebrow">
+                        DYNAMODB HISTORY
+                    </div>
+
+                    <h2>
+                        Historical measurements
+                    </h2>
+                </div>
+
+                <div class="period-selector">
+
+                    <button
+                        class="period-button"
+                        data-period="15m"
+                    >
+                        15m
+                    </button>
+
+                    <button
+                        class="period-button active"
+                        data-period="1h"
+                    >
+                        1h
+                    </button>
+
+                    <button
+                        class="period-button"
+                        data-period="24h"
+                    >
+                        24h
+                    </button>
+
+                    <button
+                        class="period-button"
+                        data-period="7d"
+                    >
+                        7d
+                    </button>
+
+                    <button
+                        class="period-button"
+                        data-period="30d"
+                    >
+                        30d
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div
+                id="history-status"
+                class="info-banner"
+            >
+                Odaberi period za prikaz istorije.
+            </div>
+
+
+            <div class="chart-grid">
+
+                <article class="chart-card">
+                    <h3>Heart Rate</h3>
+                    <canvas id="heart-rate-chart"></canvas>
+                </article>
+
+                <article class="chart-card">
+                    <h3>Skin Temperature</h3>
+                    <canvas id="temperature-chart"></canvas>
+                </article>
+
+                <article class="chart-card">
+                    <h3>Steps</h3>
+                    <canvas id="steps-chart"></canvas>
+                </article>
+
+                <article class="chart-card">
+                    <h3>Battery</h3>
+                    <canvas id="battery-chart"></canvas>
+                </article>
+
+                <article class="chart-card">
+                    <h3>Alerts</h3>
+                    <canvas id="alerts-chart"></canvas>
+                </article>
+
+                <article
+                    id="spo2-chart-card"
+                    class="chart-card hidden"
+                >
+                    <h3>SpO₂</h3>
+                    <canvas id="spo2-chart"></canvas>
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- CONFIGURATION -->
+        <section
+            id="page-configuration"
+            class="page-section"
+        >
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="eyebrow">
+                        DEVICE SHADOW
+                    </div>
+
+                    <h2>
+                        Remote Configuration
+                    </h2>
+                </div>
+
+                <button
+                    id="configuration-refresh"
+                    class="button button-secondary"
+                    type="button"
+                >
+                    Refresh Shadow
+                </button>
+
+            </div>
+
+
+            <div class="shadow-status-grid">
+
+                <article class="overview-card">
+
+                    <div class="overview-label">
+                        Synchronization
+                    </div>
+
+                    <div
+                        id="configuration-sync-status"
+                        class="overview-value"
+                    >
+                        —
+                    </div>
+
+                </article>
+
+                <article class="overview-card">
+
+                    <div class="overview-label">
+                        Shadow version
+                    </div>
+
+                    <div
+                        id="configuration-shadow-version"
+                        class="overview-value"
+                    >
+                        —
+                    </div>
+
+                </article>
+
+                <article class="overview-card">
+
+                    <div class="overview-label">
+                        Last device result
+                    </div>
+
+                    <div
+                        id="configuration-device-result"
+                        class="overview-value small-value"
+                    >
+                        —
+                    </div>
+
+                </article>
+
+            </div>
+
+
+            <form
+                id="configuration-form"
+                class="panel form-panel"
+            >
+
+                <div class="form-section">
+
+                    <div>
+                        <div class="eyebrow">
+                            INTERVALS
+                        </div>
+
+                        <h3>
+                            Sampling and reporting
+                        </h3>
+                    </div>
+
+                    <div class="form-grid">
+
+                        <label>
+                            Measurement interval (s)
+
+                            <input
+                                id="config-measurement"
+                                type="number"
+                                min="0.5"
+                                step="0.5"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Telemetry interval (s)
+
+                            <input
+                                id="config-telemetry"
+                                type="number"
+                                min="1"
+                                step="1"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Analytics window (s)
+
+                            <input
+                                id="config-analytics-window"
+                                type="number"
+                                min="1"
+                                step="1"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Health report interval (s)
+
+                            <input
+                                id="config-health-interval"
+                                type="number"
+                                min="1"
+                                step="1"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Temperature unit
+
+                            <select
+                                id="config-temperature-unit"
+                                required
+                            >
+                                <option value="CELSIUS">
+                                    Celsius
+                                </option>
+
+                                <option value="FAHRENHEIT">
+                                    Fahrenheit
+                                </option>
+                            </select>
+                        </label>
+
+                        <label>
+                            Offline queue maximum
+
+                            <input
+                                id="config-offline-queue"
+                                type="number"
+                                min="1"
+                                step="1"
+                                required
+                            >
+                        </label>
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-section">
+
+                    <div>
+                        <div class="eyebrow">
+                            THRESHOLDS
+                        </div>
+
+                        <h3>
+                            Demonstration thresholds
+                        </h3>
+                    </div>
+
+                    <div class="form-grid">
+
+                        <label>
+                            Minimum heart rate (BPM)
+
+                            <input
+                                id="config-heart-min"
+                                type="number"
+                                min="20"
+                                max="250"
+                                step="1"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Maximum resting heart rate (BPM)
+
+                            <input
+                                id="config-heart-max"
+                                type="number"
+                                min="20"
+                                max="250"
+                                step="1"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Minimum skin temperature (°C)
+
+                            <input
+                                id="config-temp-min"
+                                type="number"
+                                min="20"
+                                max="45"
+                                step="0.1"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Maximum skin temperature (°C)
+
+                            <input
+                                id="config-temp-max"
+                                type="number"
+                                min="20"
+                                max="45"
+                                step="0.1"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Low battery threshold (%)
+
+                            <input
+                                id="config-battery-low"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="1"
+                                required
+                            >
+                        </label>
+
+                        <label>
+                            Active user profile
+
+                            <input
+                                id="config-user-profile"
+                                type="text"
+                                required
+                            >
+                        </label>
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-section">
+
+                    <div>
+                        <div class="eyebrow">
+                            FEATURES
+                        </div>
+
+                        <h3>
+                            Alerts and analytics
+                        </h3>
+                    </div>
+
+                    <div class="switch-grid">
+
+                        <label class="switch-row">
+                            <input
+                                id="config-alerts-enabled"
+                                type="checkbox"
+                            >
+                            All alerts enabled
+                        </label>
+
+                        <label class="switch-row">
+                            <input
+                                id="config-heart-alerts"
+                                type="checkbox"
+                            >
+                            Heart rate alerts
+                        </label>
+
+                        <label class="switch-row">
+                            <input
+                                id="config-temperature-alerts"
+                                type="checkbox"
+                            >
+                            Temperature alerts
+                        </label>
+
+                        <label class="switch-row">
+                            <input
+                                id="config-battery-alerts"
+                                type="checkbox"
+                            >
+                            Battery alerts
+                        </label>
+
+                        <label class="switch-row">
+                            <input
+                                id="config-sensor-alerts"
+                                type="checkbox"
+                            >
+                            Sensor failure alerts
+                        </label>
+
+                        <label class="switch-row">
+                            <input
+                                id="config-analytics-enabled"
+                                type="checkbox"
+                            >
+                            Analytics enabled
+                        </label>
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-actions">
+
+                    <span
+                        id="configuration-form-message"
+                        class="muted"
+                    >
+                        —
+                    </span>
+
+                    <button
+                        id="configuration-save"
+                        class="button button-primary"
+                        type="submit"
+                    >
+                        Apply Desired Configuration
+                    </button>
+
+                </div>
+
+            </form>
+
+
+            <div class="shadow-json-grid">
+
+                <article class="panel">
+                    <h3>Desired</h3>
+                    <pre id="configuration-desired-json">{}</pre>
+                </article>
+
+                <article class="panel">
+                    <h3>Reported</h3>
+                    <pre id="configuration-reported-json">{}</pre>
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- COMMANDS -->
+        <section
+            id="page-commands"
+            class="page-section"
+        >
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="eyebrow">
+                        MQTT COMMANDS
+                    </div>
+
+                    <h2>
+                        Device Commands
+                    </h2>
+                </div>
+
+            </div>
+
+
+            <div class="commands-layout">
+
+                <form
+                    id="command-form"
+                    class="panel command-form"
+                >
+
+                    <label>
+                        Command type
+
+                        <select
+                            id="command-type"
+                            required
+                        >
+
+                            <option value="REQUEST_DEVICE_HEALTH">
+                                REQUEST_DEVICE_HEALTH
+                            </option>
+
+                            <option value="REQUEST_IMMEDIATE_MEASUREMENT">
+                                REQUEST_IMMEDIATE_MEASUREMENT
+                            </option>
+
+                            <option value="CHANGE_SIMULATION_SCENARIO">
+                                CHANGE_SIMULATION_SCENARIO
+                            </option>
+
+                            <option value="START_MONITORING">
+                                START_MONITORING
+                            </option>
+
+                            <option value="STOP_MONITORING">
+                                STOP_MONITORING
+                            </option>
+
+                            <option value="RESTART_DEVICE">
+                                RESTART_DEVICE
+                            </option>
+
+                            <option value="ENTER_MAINTENANCE">
+                                ENTER_MAINTENANCE
+                            </option>
+
+                            <option value="EXIT_MAINTENANCE">
+                                EXIT_MAINTENANCE
+                            </option>
+
+                            <option value="START_CHARGING">
+                                START_CHARGING
+                            </option>
+
+                            <option value="STOP_CHARGING">
+                                STOP_CHARGING
+                            </option>
+
+                            <option value="CALIBRATE_SENSOR">
+                                CALIBRATE_SENSOR
+                            </option>
+
+                            <option value="CLEAR_ALERTS">
+                                CLEAR_ALERTS
+                            </option>
+
+                            <option value="SIMULATE_SENSOR_FAILURE">
+                                SIMULATE_SENSOR_FAILURE
+                            </option>
+
+                            <option value="RESTORE_SENSOR">
+                                RESTORE_SENSOR
+                            </option>
+
+                            <option value="SIMULATE_NETWORK_OUTAGE">
+                                SIMULATE_NETWORK_OUTAGE
+                            </option>
+
+                            <option value="RESTORE_NETWORK">
+                                RESTORE_NETWORK
+                            </option>
+
+                        </select>
+                    </label>
+
+
+                    <div
+                        id="scenario-parameter"
+                        class="command-parameter hidden"
+                    >
+
+                        <label>
+                            Scenario
+
+                            <select id="command-scenario">
+
+                                <option value="SLEEPING">
+                                    SLEEPING
+                                </option>
+
+                                <option value="RESTING">
+                                    RESTING
+                                </option>
+
+                                <option value="WALKING">
+                                    WALKING
+                                </option>
+
+                                <option value="RUNNING">
+                                    RUNNING
+                                </option>
+
+                                <option value="EXERCISING">
+                                    EXERCISING
+                                </option>
+
+                                <option value="RECOVERY">
+                                    RECOVERY
+                                </option>
+
+                                <option value="STRESS_EVENT">
+                                    STRESS_EVENT
+                                </option>
+
+                                <option value="LOW_BATTERY">
+                                    LOW_BATTERY
+                                </option>
+
+                            </select>
+
+                        </label>
+
+                    </div>
+
+
+                    <div
+                        id="sensor-parameter"
+                        class="command-parameter hidden"
+                    >
+
+                        <label>
+                            Sensor
+
+                            <select id="command-sensor">
+
+                                <option value="heart_rate">
+                                    heart_rate
+                                </option>
+
+                                <option value="skin_temperature">
+                                    skin_temperature
+                                </option>
+
+                                <option value="step_counter">
+                                    step_counter
+                                </option>
+
+                                <option value="battery">
+                                    battery
+                                </option>
+
+                            </select>
+
+                        </label>
+
+                    </div>
+
+
+                    <div
+                        id="outage-parameter"
+                        class="command-parameter hidden"
+                    >
+
+                        <label>
+                            Outage duration (seconds)
+
+                            <input
+                                id="command-outage-duration"
+                                type="number"
+                                min="5"
+                                max="300"
+                                value="20"
+                            >
+
+                        </label>
+
+                    </div>
+
+
+                    <button
+                        id="command-submit"
+                        class="button button-primary"
+                        type="submit"
+                    >
+                        Send Command
+                    </button>
+
+                    <div
+                        id="command-form-message"
+                        class="muted"
+                    >
+                        —
+                    </div>
+
+                </form>
+
+
+                <article class="panel">
+
+                    <div class="panel-heading">
+
+                        <div>
+                            <div class="eyebrow">
+                                COMMAND LIFECYCLE
+                            </div>
+
+                            <h3>
+                                Recent commands
+                            </h3>
+                        </div>
+
+                    </div>
+
+                    <div class="table-wrapper">
+
+                        <table class="data-table">
+
+                            <thead>
+                                <tr>
+                                    <th>Command</th>
+                                    <th>commandId</th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                    <th>Result</th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="command-table-body">
+
+                                <tr>
+                                    <td
+                                        colspan="5"
+                                        class="empty-cell"
+                                    >
+                                        Još nema poslatih komandi.
+                                    </td>
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- DEVICE HEALTH -->
+        <section
+            id="page-health"
+            class="page-section"
+        >
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="eyebrow">
+                        TECHNICAL HEALTH
+                    </div>
+
+                    <h2>
+                        Device Health
+                    </h2>
+                </div>
+
+                <button
+                    id="health-refresh"
+                    class="button button-secondary"
+                    type="button"
+                >
+                    Refresh
+                </button>
+
+            </div>
+
+
+            <div class="health-grid">
+
+                <article class="overview-card">
+                    <div class="overview-label">Overall</div>
+                    <div id="health-overall" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">MQTT</div>
+                    <div id="health-mqtt" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">Uptime</div>
+                    <div id="health-uptime" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">Battery</div>
+                    <div id="health-battery" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">CPU</div>
+                    <div id="health-cpu" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">Process memory</div>
+                    <div id="health-memory" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">Local database</div>
+                    <div id="health-database" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">Offline queue</div>
+                    <div id="health-queue" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">Reconnect attempts</div>
+                    <div id="health-reconnects" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">MQTT send failures</div>
+                    <div id="health-send-failures" class="overview-value">—</div>
+                </article>
+
+                <article class="overview-card">
+                    <div class="overview-label">Software</div>
+                    <div id="health-version" class="overview-value">—</div>
+                </article>
+
+            </div>
+
+
+            <div class="dashboard-lower-grid">
+
+                <article class="panel">
+
+                    <h3>
+                        Sensors
+                    </h3>
+
+                    <div
+                        id="health-sensors"
+                        class="health-list"
+                    >
+                        Čeka se health report.
+                    </div>
+
+                </article>
+
+
+                <article class="panel">
+
+                    <h3>
+                        Capabilities
+                    </h3>
+
+                    <div
+                        id="health-capabilities"
+                        class="tag-list"
+                    >
+                    </div>
+
+                    <div class="health-error-block">
+
+                        <span class="muted">
+                            Last error
+                        </span>
+
+                        <strong id="health-last-error">
+                            —
+                        </strong>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- OTA -->
+        <section
+            id="page-ota"
+            class="page-section"
+        >
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="eyebrow">
+                        OVER-THE-AIR UPDATE
+                    </div>
+
+                    <h2>
+                        OTA Update
+                    </h2>
+                </div>
+
+            </div>
+
+
+            <article class="panel ota-placeholder">
+
+                <div class="ota-version-circle">
+                    <span>v</span>
+                    <strong id="ota-current-version">
+                        1.0.0
+                    </strong>
+                </div>
+
+                <div>
+
+                    <h2>
+                        OTA frontend is prepared
+                    </h2>
+
+                    <p class="muted">
+                        Trenutno je instalirana verzija
+                        HealthBand 1.0.0. Lokalna OTA
+                        infrastruktura, release paketi,
+                        rollback i AWS IoT Jobs biće
+                        implementirani u narednim modulima.
+                    </p>
+
+                    <button
+                        class="button button-primary"
+                        disabled
+                    >
+                        No release available yet
+                    </button>
+
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- EVENT LOG -->
+        <section
+            id="page-events"
+            class="page-section"
+        >
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="eyebrow">
+                        SYSTEM HISTORY
+                    </div>
+
+                    <h2>
+                        Event Log
+                    </h2>
+                </div>
+
+                <div class="event-controls">
+
+                    <select id="event-filter">
+                        <option value="ALL">
+                            All
+                        </option>
+
+                        <option value="EVENT">
+                            Events
+                        </option>
+
+                        <option value="ALERT">
+                            Alerts
+                        </option>
+
+                        <option value="COMMAND_RESPONSE">
+                            Commands
+                        </option>
+                    </select>
+
+                    <button
+                        id="event-refresh"
+                        class="button button-secondary"
+                        type="button"
+                    >
+                        Refresh
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <article class="panel">
+
+                <div
+                    id="event-log"
+                    class="event-log"
+                >
+                    <div class="empty-cell">
+                        Čeka se istorija događaja.
+                    </div>
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <footer class="application-footer">
+
+            <strong>
+                HealthBand
+            </strong>
+
+            <span>
+                Svi prikazani podaci su simulirani.
+                Sistem nije medicinski uređaj.
+            </span>
+
+        </footer>
+
+    </main>
+
+</div>
+
+
+<div
+    id="toast-container"
+    class="toast-container"
+></div>
+
+
+<script src="assets/vendor/chart.umd.min.js"></script>
+
+<script
+    type="module"
+    src="js/app.js"
+></script>
+
+</body>
+</html>
