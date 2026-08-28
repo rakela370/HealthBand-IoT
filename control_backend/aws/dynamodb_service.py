@@ -135,15 +135,9 @@ class DynamoDbService:
         """Return alert events."""
 
         return self._query_events(
-            device_id=(
-                device_id
-            ),
-            start_iso=(
-                start_iso
-            ),
-            end_iso=(
-                end_iso
-            ),
+            device_id=device_id,
+            start_iso=start_iso,
+            end_iso=end_iso,
             record_type="ALERT",
             limit=limit,
         )
@@ -158,16 +152,27 @@ class DynamoDbService:
         """Return normal device events."""
 
         return self._query_events(
-            device_id=(
-                device_id
-            ),
-            start_iso=(
-                start_iso
-            ),
-            end_iso=(
-                end_iso
-            ),
+            device_id=device_id,
+            start_iso=start_iso,
+            end_iso=end_iso,
             record_type="EVENT",
+            limit=limit,
+        )
+
+    def get_command_responses(
+        self,
+        device_id: str,
+        start_iso: str,
+        end_iso: str,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Return persisted command lifecycle responses."""
+
+        return self._query_events(
+            device_id=device_id,
+            start_iso=start_iso,
+            end_iso=end_iso,
+            record_type="COMMAND_RESPONSE",
             limit=limit,
         )
 

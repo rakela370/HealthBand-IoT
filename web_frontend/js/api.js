@@ -235,6 +235,16 @@ export class ApiClient {
     }
 
 
+    getCommandResponses(
+        period = "24h"
+    ) {
+
+        return this.request(
+            `/api/devices/${this.deviceId}/command-responses?period=${encodeURIComponent(period)}`
+        );
+    }
+
+
     websocketUrl() {
 
         const wsBase =

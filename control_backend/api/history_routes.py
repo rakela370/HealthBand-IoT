@@ -52,15 +52,9 @@ async def query_history(
     try:
         start_time, end_time = (
             resolve_time_range(
-                period=(
-                    period
-                ),
-                start=(
-                    start
-                ),
-                end=(
-                    end
-                ),
+                period=period,
+                start=start,
+                end=end,
             )
         )
 
@@ -91,23 +85,13 @@ async def query_history(
     )
 
     return {
-        "deviceId": (
-            device_id
-        ),
-        "from": (
-            start_iso
-        ),
-        "to": (
-            end_iso
-        ),
-        "count": (
-            len(
-                items
-            )
-        ),
-        "items": (
+        "deviceId": device_id,
+        "from": start_iso,
+        "to": end_iso,
+        "count": len(
             items
         ),
+        "items": items,
     }
 
 
@@ -268,6 +252,47 @@ async def get_events(
         request.app.state
         .dynamodb_service
         .get_events,
+        period,
+        start,
+        end,
+        limit,
+    )
+
+
+@router.get(
+    "/{device_id}/command-responses"
+)
+async def get_command_responses(
+    device_id: str,
+    request: Request,
+    period: str = Query(
+        default="24h"
+    ),
+    start: str | None = Query(
+        default=None
+    ),
+    end: str | None = Query(
+        default=None
+    ),
+    limit: int = Query(
+        default=1000,
+        ge=1,
+        le=5000,
+    ),
+) -> dict[str, Any]:
+    """Return persisted command lifecycle responses."""
+
+    ensure_device(
+        request,
+        device_id,
+    )
+
+    return await query_history(
+        request,
+        device_id,
+        request.app.state
+        .dynamodb_service
+        .get_command_responses,
         period,
         start,
         end,

@@ -52,7 +52,8 @@ export class EventLogView {
 
             const [
                 events,
-                alerts
+                alerts,
+                commandResponses
             ] = await Promise.all(
                 [
                     this.api
@@ -63,12 +64,17 @@ export class EventLogView {
                     this.api
                         .getAlerts(
                             "24h"
+                        ),
+
+                    this.api
+                        .getCommandResponses(
+                            "24h"
                         )
                 ]
             );
 
 
-            this.items = [
+            const historicalItems = [
 
                 ...(
                     events.items
@@ -89,6 +95,7 @@ export class EventLogView {
                     })
                 ),
 
+
                 ...(
                     alerts.items
                     ?? []
@@ -106,8 +113,63 @@ export class EventLogView {
                         payload:
                             item
                     })
+                ),
+
+
+                ...(
+                    commandResponses.items
+                    ?? []
+                ).map(
+                    item => ({
+                        category:
+                            "COMMAND_RESPONSE",
+
+                        timestamp:
+                            item.timestamp
+                            ?? this._timestampFromKey(
+                                item.timestampEventId
+                            ),
+
+                        payload:
+                            item
+                    })
                 )
             ];
+
+
+            /*
+             * Merge persisted DynamoDB history with realtime
+             * messages already received during the current
+             * browser session.
+             *
+             * This prevents navigation/Refresh from deleting
+             * realtime command responses.
+             */
+            const merged =
+                new Map();
+
+
+            for (
+                const item
+                of [
+                    ...historicalItems,
+                    ...this.items
+                ]
+            ) {
+
+                merged.set(
+                    this._identity(
+                        item
+                    ),
+                    item
+                );
+            }
+
+
+            this.items =
+                Array.from(
+                    merged.values()
+                );
 
 
             this._sort();
@@ -148,26 +210,49 @@ export class EventLogView {
                 );
 
 
+        const item = {
+
+            category:
+                mapped,
+
+            timestamp:
+                payload.timestamp
+                ?? new Date()
+                    .toISOString(),
+
+            payload
+        };
+
+
+        const identity =
+            this._identity(
+                item
+            );
+
+
+        this.items =
+            this.items.filter(
+                existing =>
+                    this._identity(
+                        existing
+                    )
+                    !== identity
+            );
+
+
         this.items.unshift(
-            {
-                category:
-                    mapped,
-
-                timestamp:
-                    payload.timestamp
-                    ?? new Date()
-                        .toISOString(),
-
-                payload
-            }
+            item
         );
 
 
         this.items =
             this.items.slice(
                 0,
-                250
+                500
             );
+
+
+        this._sort();
 
         this.render();
     }
@@ -218,7 +303,7 @@ export class EventLogView {
             const item
             of visible.slice(
                 0,
-                150
+                200
             )
         ) {
 
@@ -272,7 +357,9 @@ export class EventLogView {
             `status-badge status-${this._categoryKind(item)}`;
 
         badge.textContent =
-            item.category;
+            this._categoryLabel(
+                item
+            );
 
         category.appendChild(
             badge
@@ -336,10 +423,32 @@ export class EventLogView {
             === "COMMAND_RESPONSE"
         ) {
 
+            const commandType =
+                payload.type
+                ?? payload.commandType
+                ?? "COMMAND";
+
+
+            const status =
+                payload.status
+                ?? "UNKNOWN";
+
+
+            const message =
+                payload.message
+                ?? "";
+
+
+            const commandId =
+                payload.commandId
+                ?? "unknown-command";
+
+
             return (
-                `${payload.type ?? "COMMAND"} — `
-                + `${payload.status ?? "UNKNOWN"} — `
-                + `${payload.message ?? ""}`
+                `${commandType} — `
+                + `${status} — `
+                + `${message} `
+                + `[${commandId}]`
             );
         }
 
@@ -392,6 +501,27 @@ export class EventLogView {
     }
 
 
+    _categoryLabel(
+        item
+    ) {
+
+        if (
+            item.category
+            === "COMMAND_RESPONSE"
+        ) {
+
+            return (
+                item.payload
+                ?.status
+                ?? "COMMAND"
+            );
+        }
+
+
+        return item.category;
+    }
+
+
     _categoryKind(
         item
     ) {
@@ -422,6 +552,57 @@ export class EventLogView {
 
 
         return "neutral";
+    }
+
+
+    _identity(
+        item
+    ) {
+
+        const payload =
+            item.payload
+            ?? {};
+
+
+        if (
+            payload.messageId
+        ) {
+
+            return (
+                `message:${payload.messageId}`
+            );
+        }
+
+
+        if (
+            payload.timestampEventId
+        ) {
+
+            return (
+                `event:${payload.timestampEventId}`
+            );
+        }
+
+
+        if (
+            item.category
+            === "COMMAND_RESPONSE"
+        ) {
+
+            return (
+                "command:"
+                + `${payload.commandId ?? "unknown"}:`
+                + `${payload.status ?? "unknown"}:`
+                + `${item.timestamp ?? "unknown"}`
+            );
+        }
+
+
+        return (
+            `${item.category}:`
+            + `${item.timestamp ?? "unknown"}:`
+            + `${payload.eventType ?? payload.type ?? "unknown"}`
+        );
     }
 
 
