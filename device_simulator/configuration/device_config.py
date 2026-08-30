@@ -45,10 +45,15 @@ class DeviceConfig:
 
     analytics_enabled: bool = True
 
+    # HealthBand 2.0.0-only configuration. None means unsupported.
+    spo2_alerts_enabled: bool | None = None
+    spo2_minimum_threshold: float | None = None
+    spo2_measurement_enabled: bool | None = None
+
     def to_shadow_dict(self) -> dict[str, Any]:
         """Convert configuration to Device Shadow representation."""
 
-        return {
+        result: dict[str, Any] = {
             "measurementIntervalSec": (
                 self.measurement_interval_sec
             ),
@@ -108,6 +113,23 @@ class DeviceConfig:
                 self.analytics_enabled
             ),
         }
+
+        if self.spo2_alerts_enabled is not None:
+            result[
+                "spo2AlertsEnabled"
+            ] = self.spo2_alerts_enabled
+
+        if self.spo2_minimum_threshold is not None:
+            result[
+                "spo2MinimumThreshold"
+            ] = self.spo2_minimum_threshold
+
+        if self.spo2_measurement_enabled is not None:
+            result[
+                "spo2MeasurementEnabled"
+            ] = self.spo2_measurement_enabled
+
+        return result
 
     def convert_temperature_from_celsius(
         self,

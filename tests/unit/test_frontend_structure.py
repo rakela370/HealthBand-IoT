@@ -150,3 +150,79 @@ def test_frontend_contains_no_aws_credentials() -> None:
             value
             not in source
         )
+
+
+def test_version2_frontend_hooks_are_present() -> None:
+    html = (
+        read(
+            "index.html"
+        )
+    )
+
+    dashboard = (
+        read(
+            "js/dashboard.js"
+        )
+    )
+
+    simulation = (
+        read(
+            "js/simulation.js"
+        )
+    )
+
+    charts = (
+        read(
+            "js/charts.js"
+        )
+    )
+
+    configuration = (
+        read(
+            "js/configuration.js"
+        )
+    )
+
+    required_ids = [
+        "sensor-spo2-card",
+        "watch-spo2-row",
+        "spo2-chart-card",
+        "sensor-calories-card",
+        "watch-calories-row",
+        "calories-chart-card",
+        "config-spo2-section",
+        "config-spo2-minimum",
+        "config-spo2-enabled",
+        "config-spo2-alerts",
+    ]
+
+    for value in required_ids:
+        assert (
+            value
+            in html
+        )
+
+    assert (
+        "oxygenSaturationPercentage"
+        in dashboard
+    )
+
+    assert (
+        "caloriesBurnedToday"
+        in dashboard
+    )
+
+    assert (
+        "caloriesBurnedToday"
+        in simulation
+    )
+
+    assert (
+        "dailyTotalKcal"
+        in charts
+    )
+
+    assert (
+        "SPO2_MONITORING"
+        in configuration
+    )

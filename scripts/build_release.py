@@ -30,7 +30,6 @@ def sha256_file(
         hashlib.sha256()
     )
 
-
     with path.open(
         "rb"
     ) as source:
@@ -47,7 +46,6 @@ def sha256_file(
             digest.update(
                 chunk
             )
-
 
     return (
         digest.hexdigest()
@@ -67,7 +65,6 @@ def should_include(
             False
         )
 
-
     if (
         path.suffix
         in {
@@ -82,7 +79,6 @@ def should_include(
         return (
             False
         )
-
 
     return (
         path.is_file()
@@ -105,7 +101,6 @@ def copy_device_source(
         / "device_simulator"
     )
 
-
     if (
         not device_source
         .is_dir()
@@ -115,12 +110,10 @@ def copy_device_source(
             "was not found."
         )
 
-
     destination = (
         payload_root
         / "device_simulator"
     )
-
 
     for path in (
         device_source.rglob(
@@ -135,25 +128,21 @@ def copy_device_source(
         ):
             continue
 
-
         relative = (
             path.relative_to(
                 device_source
             )
         )
 
-
         target = (
             destination
             / relative
         )
 
-
         target.parent.mkdir(
             parents=True,
             exist_ok=True,
         )
-
 
         shutil.copy2(
             path,
@@ -174,7 +163,6 @@ def build_file_hashes(
         str,
     ] = {}
 
-
     for path in sorted(
         staging_root.rglob(
             "*"
@@ -187,13 +175,11 @@ def build_file_hashes(
         ):
             continue
 
-
         if (
             path.name
             == "manifest.json"
         ):
             continue
-
 
         relative = (
             path.relative_to(
@@ -201,7 +187,6 @@ def build_file_hashes(
             )
             .as_posix()
         )
-
 
         result[
             relative
@@ -211,7 +196,6 @@ def build_file_hashes(
             )
         )
 
-
     return (
         result
     )
@@ -219,6 +203,7 @@ def build_file_hashes(
 
 def create_self_test(
     staging_root: Path,
+    version: str,
     capabilities: list[
         str
     ],
@@ -234,7 +219,6 @@ def create_self_test(
             )
         )
     )
-
 
     source = f'''"""HealthBand release self-test."""
 
@@ -263,7 +247,8 @@ def main() -> None:
     engine = ScenarioEngine()
 
     manager = SensorManager(
-        random_seed=123
+        random_seed=123,
+        software_version={version!r},
     )
 
     snapshot = manager.read_all(
@@ -279,10 +264,14 @@ def main() -> None:
 
     if "SPO2_MONITORING" in capabilities:
         from device_simulator.sensors.spo2_sensor import SpO2Sensor
+
         assert SpO2Sensor is not None
+        assert "oxygenSaturationPercentage" in snapshot.measurements
+        assert snapshot.sensor_status.get("spo2") == "OK"
 
     if "CALORIE_ESTIMATION" in capabilities:
         from device_simulator.analytics.calorie_estimator import CalorieEstimator
+
         assert CalorieEstimator is not None
 
     print("SELF_TEST_OK")
@@ -291,7 +280,6 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 '''
-
 
     (
         staging_root
@@ -312,7 +300,6 @@ def write_zip(
         parents=True,
         exist_ok=True,
     )
-
 
     with zipfile.ZipFile(
         output_path,
@@ -335,7 +322,6 @@ def write_zip(
             ):
                 continue
 
-
             relative = (
                 path.relative_to(
                     staging_root
@@ -343,13 +329,11 @@ def write_zip(
                 .as_posix()
             )
 
-
             info = (
                 zipfile.ZipInfo(
                     relative
                 )
             )
-
 
             info.date_time = (
                 2026,
@@ -360,11 +344,9 @@ def write_zip(
                 0,
             )
 
-
             info.compress_type = (
                 zipfile.ZIP_DEFLATED
             )
-
 
             archive.writestr(
                 info,
@@ -391,30 +373,25 @@ def build_release(
         f"healthband-{version}.zip"
     )
 
-
     version_directory = (
         output_root
         / f"version_{version}"
     )
-
 
     version_directory.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-
     archive_path = (
         version_directory
         / artifact_name
     )
 
-
     manifest_copy_path = (
         version_directory
         / "manifest.json"
     )
-
 
     sha_path = (
         version_directory
@@ -423,7 +400,6 @@ def build_release(
             ".sha256"
         )
     )
-
 
     with tempfile.TemporaryDirectory(
         prefix=(
@@ -437,37 +413,32 @@ def build_release(
             )
         )
 
-
         payload_root = (
             staging_root
             / "payload"
         )
-
 
         payload_root.mkdir(
             parents=True,
             exist_ok=True,
         )
 
-
         copy_device_source(
             source_root,
             payload_root,
         )
 
-
         create_self_test(
             staging_root,
+            version,
             capabilities,
         )
-
 
         created_at = (
             datetime.now(
                 timezone.utc
             ).isoformat()
         )
-
 
         release_info = {
 
@@ -491,7 +462,6 @@ def build_release(
                 created_at,
         }
 
-
         (
             staging_root
             / "release_info.json"
@@ -505,13 +475,11 @@ def build_release(
             encoding="utf-8",
         )
 
-
         file_hashes = (
             build_file_hashes(
                 staging_root
             )
         )
-
 
         manifest = {
 
@@ -548,7 +516,6 @@ def build_release(
                 created_at,
         }
 
-
         (
             staging_root
             / "manifest.json"
@@ -563,12 +530,10 @@ def build_release(
             encoding="utf-8",
         )
 
-
         write_zip(
             staging_root,
             archive_path,
         )
-
 
         manifest_copy_path.write_text(
             json.dumps(
@@ -581,13 +546,11 @@ def build_release(
             encoding="utf-8",
         )
 
-
     archive_sha256 = (
         sha256_file(
             archive_path
         )
     )
-
 
     sha_path.write_text(
         (
@@ -596,7 +559,6 @@ def build_release(
         ),
         encoding="utf-8",
     )
-
 
     return (
         archive_path,
@@ -616,18 +578,15 @@ def main() -> None:
         )
     )
 
-
     parser.add_argument(
         "--version",
         required=True,
     )
 
-
     parser.add_argument(
         "--minimum-current-version",
         required=True,
     )
-
 
     parser.add_argument(
         "--capability",
@@ -639,17 +598,14 @@ def main() -> None:
         ),
     )
 
-
     parser.add_argument(
         "--output-root",
         default="ota_artifacts",
     )
 
-
     args = (
         parser.parse_args()
     )
-
 
     capabilities = sorted(
         set(
@@ -657,7 +613,6 @@ def main() -> None:
             + args.capability
         )
     )
-
 
     (
         archive,
@@ -685,21 +640,17 @@ def main() -> None:
         ),
     )
 
-
     print(
         f"Release built: {archive}"
     )
-
 
     print(
         f"Manifest: {manifest}"
     )
 
-
     print(
         f"SHA file: {sha_file}"
     )
-
 
     print(
         (
@@ -707,7 +658,6 @@ def main() -> None:
             f"{archive.stat().st_size} bytes"
         )
     )
-
 
     print(
         (

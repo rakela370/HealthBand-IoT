@@ -39,12 +39,37 @@ def test_invalid_interval_is_rejected() -> None:
         )
 
 
-def test_version2_field_is_rejected_in_version1_api() -> None:
+def test_version2_spo2_fields_are_accepted_by_api() -> None:
+    model = (
+        ConfigurationUpdateRequest(
+            spo2MeasurementEnabled=True,
+            spo2AlertsEnabled=True,
+            spo2MinimumThreshold=92.0,
+        )
+    )
+
+    assert (
+        model.spo2MeasurementEnabled
+        is True
+    )
+
+    assert (
+        model.spo2AlertsEnabled
+        is True
+    )
+
+    assert (
+        model.spo2MinimumThreshold
+        == 92.0
+    )
+
+
+def test_invalid_spo2_threshold_is_rejected_by_api() -> None:
     with pytest.raises(
         ValidationError
     ):
         ConfigurationUpdateRequest(
-            spo2MeasurementEnabled=True
+            spo2MinimumThreshold=120.0
         )
 
 

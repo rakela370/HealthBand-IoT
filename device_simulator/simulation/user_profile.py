@@ -23,3 +23,7 @@ class UserProfile:
     stress_heart_rate_bpm: float = 122.0
 
     base_skin_temperature_c: float = 33.6
+
+    # Synthetic profile values used only by derived calorie estimation.
+    weight_kg: float = 75.0
+    timezone_name: str = "Europe/Sarajevo"

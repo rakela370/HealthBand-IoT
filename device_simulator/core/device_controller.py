@@ -21,6 +21,9 @@ from device_simulator.analytics.analytics_manager import (
     AnalyticsManager,
     AnalyticsResult,
 )
+from device_simulator.analytics.calorie_estimator import (
+    CalorieEstimator,
+)
 from device_simulator.commands.command import (
     Command,
     CommandResult,
@@ -102,6 +105,9 @@ from device_simulator.storage.synchronization_manager import (
     SynchronizationManager,
     SynchronizationResult,
 )
+from device_simulator.utils.versioning import (
+    is_at_least,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -175,6 +181,19 @@ class DeviceController:
             )
         )
 
+        self.configuration_manager = (
+            configuration_manager
+            or ConfigurationManager(
+                software_version=(
+                    self.software_version
+                )
+            )
+        )
+
+        config = (
+            self.configuration_manager.current
+        )
+
         self.sensor_manager = (
             SensorManager(
                 user_profile=(
@@ -183,16 +202,13 @@ class DeviceController:
                 random_seed=(
                     random_seed
                 ),
+                software_version=(
+                    self.software_version
+                ),
+                spo2_measurement_enabled=(
+                    config.spo2_measurement_enabled
+                ),
             )
-        )
-
-        self.configuration_manager = (
-            configuration_manager
-            or ConfigurationManager()
-        )
-
-        config = (
-            self.configuration_manager.current
         )
 
         self.analytics_manager = (
@@ -205,6 +221,15 @@ class DeviceController:
                 ),
                 window_sec=(
                     config.analytics_window_sec
+                ),
+                spo2_minimum_threshold=(
+                    config.spo2_minimum_threshold
+                    if config.spo2_minimum_threshold
+                    is not None
+                    else 92.0
+                ),
+                spo2_enabled=(
+                    config.spo2_measurement_enabled
                 ),
             )
         )
@@ -228,6 +253,12 @@ class DeviceController:
                 ),
                 low_battery_threshold_percentage=(
                     config.low_battery_percentage
+                ),
+                spo2_minimum_threshold=(
+                    config.spo2_minimum_threshold
+                    if config.spo2_minimum_threshold
+                    is not None
+                    else 92.0
                 ),
             )
         )
@@ -283,6 +314,25 @@ class DeviceController:
         else:
             self.offline_queue = (
                 offline_queue
+            )
+
+        self.calorie_estimator: (
+            CalorieEstimator | None
+        ) = None
+
+        if is_at_least(
+            self.software_version,
+            "2.0.0",
+        ):
+            self.calorie_estimator = (
+                CalorieEstimator(
+                    user_profile=(
+                        self.user_profile
+                    ),
+                    database=(
+                        self.offline_queue.database
+                    ),
+                )
             )
 
         if (
@@ -757,6 +807,23 @@ class DeviceController:
             ),
         }
 
+        if is_at_least(
+            self.software_version,
+            "2.0.0",
+        ):
+            checks[
+                "spo2_sensor"
+            ] = self.sensor_manager.has_sensor(
+                "spo2"
+            )
+
+            checks[
+                "calorie_estimator"
+            ] = (
+                self.calorie_estimator
+                is not None
+            )
+
         failed = [
             name
             for (
@@ -954,6 +1021,33 @@ class DeviceController:
             )
         )
 
+        if self.calorie_estimator is not None:
+            calorie_values = (
+                self.calorie_estimator
+                .estimate_interval(
+                    measurements=(
+                        snapshot.measurements
+                    ),
+                    activity_level=(
+                        snapshot.activity_level
+                    ),
+                    scenario=(
+                        snapshot.scenario
+                    ),
+                    elapsed_sec=(
+                        self.current_config
+                        .measurement_interval_sec
+                    ),
+                    timestamp=(
+                        snapshot.timestamp
+                    ),
+                )
+            )
+
+            snapshot.measurements.update(
+                calorie_values
+            )
+
         self.latest_snapshot = (
             snapshot
         )
@@ -1150,6 +1244,14 @@ class DeviceController:
             )
 
         return {
+            "schemaVersion": (
+                2
+                if is_at_least(
+                    self.software_version,
+                    "2.0.0",
+                )
+                else 1
+            ),
             "deviceId": (
                 self.device_id
             ),
@@ -1224,6 +1326,14 @@ class DeviceController:
             return (
                 config
                 .sensor_failure_alerts_enabled
+            )
+
+        if alert.type in {
+            AlertType.SPO2_BELOW_THRESHOLD,
+            AlertType.SPO2_SENSOR_FAILED,
+        }:
+            return bool(
+                config.spo2_alerts_enabled
             )
 
         return (
@@ -2995,6 +3105,18 @@ class DeviceController:
             config.low_battery_percentage
         )
 
+        self.alert_manager.spo2_minimum_threshold = (
+            config.spo2_minimum_threshold
+            if config.spo2_minimum_threshold
+            is not None
+            else 92.0
+        )
+
+        if config.spo2_measurement_enabled is not None:
+            self.sensor_manager.set_spo2_enabled(
+                config.spo2_measurement_enabled
+            )
+
         self.device_health_monitor.low_battery_threshold = (
             config.low_battery_percentage
         )
@@ -3009,6 +3131,15 @@ class DeviceController:
                 ),
                 window_sec=(
                     config.analytics_window_sec
+                ),
+                spo2_minimum_threshold=(
+                    config.spo2_minimum_threshold
+                    if config.spo2_minimum_threshold
+                    is not None
+                    else 92.0
+                ),
+                spo2_enabled=(
+                    config.spo2_measurement_enabled
                 ),
             )
         )
@@ -3108,7 +3239,7 @@ class DeviceController:
             "capabilities"
         ] = list(
             self.device_health_monitor
-            .VERSION_1_CAPABILITIES
+            .capabilities
         )
 
         reported[

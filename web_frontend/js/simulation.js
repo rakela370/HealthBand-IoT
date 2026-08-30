@@ -172,6 +172,31 @@ export class SimulationView {
                 )
             );
         }
+
+
+        const caloriesToday =
+            measurements
+            .caloriesBurnedToday;
+
+        if (
+            caloriesToday !== undefined
+            && caloriesToday !== null
+        ) {
+
+            byId(
+                "watch-calories-row"
+            )?.classList.remove(
+                "hidden"
+            );
+
+            setText(
+                "watch-calories",
+                formatNumber(
+                    caloriesToday,
+                    1
+                )
+            );
+        }
     }
 
 

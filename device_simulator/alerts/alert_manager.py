@@ -26,6 +26,7 @@ class AlertManager:
         skin_temperature_minimum_threshold: float = 30.0,
         skin_temperature_maximum_threshold: float = 37.0,
         low_battery_threshold_percentage: float = 15.0,
+        spo2_minimum_threshold: float = 92.0,
     ) -> None:
         self.device_id = device_id
 
@@ -47,6 +48,10 @@ class AlertManager:
 
         self.low_battery_threshold_percentage = (
             low_battery_threshold_percentage
+        )
+
+        self.spo2_minimum_threshold = (
+            spo2_minimum_threshold
         )
 
         self._evaluator = ThresholdEvaluator()
@@ -202,6 +207,40 @@ class AlertManager:
                 )
             )
 
+        spo2 = snapshot.measurements.get(
+            "oxygenSaturationPercentage"
+        )
+
+        spo2_low = (
+            spo2 is not None
+            and float(spo2)
+            < self.spo2_minimum_threshold
+        )
+
+        if self._evaluator.should_trigger(
+            rule_key="spo2-low",
+            condition=spo2_low,
+            now=now,
+        ):
+            alerts.append(
+                self._create_alert(
+                    snapshot=snapshot,
+                    alert_type=(
+                        AlertType.SPO2_BELOW_THRESHOLD
+                    ),
+                    severity=AlertSeverity.WARNING,
+                    measured_value=spo2,
+                    configured_threshold=(
+                        self.spo2_minimum_threshold
+                    ),
+                    sensor_name="spo2",
+                    message=(
+                        "Simulated SpO2 value is below "
+                        "the configured demonstration threshold."
+                    ),
+                )
+            )
+
         expected_measurements = {
             "heart_rate": "heartRateBpm",
             "skin_temperature": (
@@ -209,6 +248,7 @@ class AlertManager:
             ),
             "step_counter": "stepsInInterval",
             "battery": "batteryPercentage",
+            "spo2": "oxygenSaturationPercentage",
         }
 
         for (
@@ -227,7 +267,11 @@ class AlertManager:
                 alerts.append(
                     self._create_alert(
                         snapshot=snapshot,
-                        alert_type=AlertType.SENSOR_FAILED,
+                        alert_type=(
+                            AlertType.SPO2_SENSOR_FAILED
+                            if sensor_name == "spo2"
+                            else AlertType.SENSOR_FAILED
+                        ),
                         severity=AlertSeverity.HIGH,
                         sensor_name=sensor_name,
                         message=(

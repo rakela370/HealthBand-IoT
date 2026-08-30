@@ -15,7 +15,7 @@ class ActivityLevel(StrEnum):
 
 
 class SimulationScenario(StrEnum):
-    """Simulation scenarios supported by HealthBand version 1.0.0."""
+    """Simulation scenarios supported by HealthBand."""
 
     SLEEPING = "SLEEPING"
     RESTING = "RESTING"
@@ -42,5 +42,7 @@ class ScenarioContext:
 
     battery_drain_multiplier: float
 
+    spo2_target_percentage: float = 98.0
+
     failed_sensor_name: str | None = None
-    force_low_battery: bool = False     
+    force_low_battery: bool = False

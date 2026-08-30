@@ -16,7 +16,10 @@ const CONFIG_KEYS = [
     "alerts",
     "offlineQueueMaximumItems",
     "activeUserProfile",
-    "analyticsEnabled"
+    "analyticsEnabled",
+    "spo2AlertsEnabled",
+    "spo2MinimumThreshold",
+    "spo2MeasurementEnabled"
 ];
 
 
@@ -28,6 +31,9 @@ export class ConfigurationView {
 
         this.api =
             api;
+
+        this.spo2Supported =
+            false;
 
         this.form =
             byId(
@@ -293,12 +299,24 @@ export class ConfigurationView {
         }
 
 
+        this.spo2Supported =
+            this._supportsSpo2(
+                reported
+            );
+
+        byId(
+            "config-spo2-section"
+        )?.classList.toggle(
+            "hidden",
+            !this.spo2Supported
+        );
+
+
         this._fillForm(
-            Object.keys(
+            this._effectiveConfig(
+                reported,
                 desired
-            ).length
-                ? desired
-                : reported
+            )
         );
     }
 
@@ -416,12 +434,33 @@ export class ConfigurationView {
             "config-analytics-enabled",
             config.analyticsEnabled
         );
+
+
+        if (
+            this.spo2Supported
+        ) {
+
+            this._setInput(
+                "config-spo2-minimum",
+                config.spo2MinimumThreshold
+            );
+
+            this._setCheckbox(
+                "config-spo2-enabled",
+                config.spo2MeasurementEnabled
+            );
+
+            this._setCheckbox(
+                "config-spo2-alerts",
+                config.spo2AlertsEnabled
+            );
+        }
     }
 
 
     _readForm() {
 
-        return {
+        const desired = {
 
             measurementIntervalSec:
                 Number(
@@ -538,6 +577,124 @@ export class ConfigurationView {
                 byId(
                     "config-analytics-enabled"
                 ).checked
+        };
+
+
+        if (
+            this.spo2Supported
+        ) {
+
+            desired.spo2MinimumThreshold =
+                Number(
+                    byId(
+                        "config-spo2-minimum"
+                    ).value
+                );
+
+            desired.spo2MeasurementEnabled =
+                byId(
+                    "config-spo2-enabled"
+                ).checked;
+
+            desired.spo2AlertsEnabled =
+                byId(
+                    "config-spo2-alerts"
+                ).checked;
+        }
+
+
+        return desired;
+    }
+
+
+    _supportsSpo2(
+        reported
+    ) {
+
+        const capabilities =
+            reported.capabilities
+            ?? [];
+
+
+        if (
+            Array.isArray(
+                capabilities
+            )
+            && capabilities.includes(
+                "SPO2_MONITORING"
+            )
+        ) {
+            return true;
+        }
+
+
+        const version =
+            String(
+                reported.softwareVersion
+                ?? ""
+            );
+
+        const major =
+            Number(
+                version.split(
+                    "."
+                )[0]
+            );
+
+
+        return (
+            major >= 2
+            || reported.spo2MeasurementEnabled
+                !== undefined
+            || reported.spo2MinimumThreshold
+                !== undefined
+        );
+    }
+
+
+    _effectiveConfig(
+        reported,
+        desired
+    ) {
+
+        const hasDesired =
+            Object.keys(
+                desired
+            ).length > 0;
+
+
+        if (
+            !hasDesired
+        ) {
+            return reported;
+        }
+
+
+        return {
+            ...reported,
+            ...desired,
+
+            thresholds: {
+                ...(
+                    reported.thresholds
+                    ?? {}
+                ),
+                ...(
+                    desired.thresholds
+                    ?? {}
+                )
+            },
+
+            alerts: {
+                ...(
+                    reported.alerts
+                    ?? {}
+                ),
+                ...(
+                    desired.alerts
+                    ?? {}
+                )
+            }
         };
     }
 

@@ -160,6 +160,15 @@ export class HistoryCharts {
             );
 
 
+        const calories =
+            items.map(
+                item =>
+                    item.measurements
+                    ?.caloriesBurnedToday
+                    ?? null
+            );
+
+
         const temperatureUnit =
             items.find(
                 item =>
@@ -215,19 +224,23 @@ export class HistoryCharts {
         );
 
 
-        if (
+        const hasSpo2 =
             spo2.some(
                 value =>
                     value !== null
                     && value !== undefined
-            )
-        ) {
-
-            byId(
-                "spo2-chart-card"
-            ).classList.remove(
-                "hidden"
             );
+
+        byId(
+            "spo2-chart-card"
+        )?.classList.toggle(
+            "hidden",
+            !hasSpo2
+        );
+
+        if (
+            hasSpo2
+        ) {
 
             this._line(
                 "spo2",
@@ -235,6 +248,46 @@ export class HistoryCharts {
                 spo2,
                 "%",
                 "SpO₂"
+            );
+        }
+
+        else {
+            this._destroy(
+                "spo2"
+            );
+        }
+
+
+        const hasCalories =
+            calories.some(
+                value =>
+                    value !== null
+                    && value !== undefined
+            );
+
+        byId(
+            "calories-chart-card"
+        )?.classList.toggle(
+            "hidden",
+            !hasCalories
+        );
+
+        if (
+            hasCalories
+        ) {
+
+            this._line(
+                "calories",
+                labels,
+                calories,
+                "kcal",
+                "Estimated Calories Today"
+            );
+        }
+
+        else {
+            this._destroy(
+                "calories"
             );
         }
     }
@@ -310,6 +363,12 @@ export class HistoryCharts {
             );
 
 
+        const dailyCalories =
+            this._dailyCalories(
+                items
+            );
+
+
         this._line(
             "heart-rate",
             labels,
@@ -351,19 +410,23 @@ export class HistoryCharts {
         );
 
 
-        if (
+        const hasSpo2 =
             spo2.some(
                 value =>
                     value !== null
                     && value !== undefined
-            )
-        ) {
-
-            byId(
-                "spo2-chart-card"
-            ).classList.remove(
-                "hidden"
             );
+
+        byId(
+            "spo2-chart-card"
+        )?.classList.toggle(
+            "hidden",
+            !hasSpo2
+        );
+
+        if (
+            hasSpo2
+        ) {
 
             this._line(
                 "spo2",
@@ -373,6 +436,133 @@ export class HistoryCharts {
                 "Average SpO₂"
             );
         }
+
+        else {
+            this._destroy(
+                "spo2"
+            );
+        }
+
+
+        const hasCalories =
+            dailyCalories.values.length
+            > 0;
+
+        byId(
+            "calories-chart-card"
+        )?.classList.toggle(
+            "hidden",
+            !hasCalories
+        );
+
+        if (
+            hasCalories
+        ) {
+
+            this._bar(
+                "calories",
+                dailyCalories.labels,
+                dailyCalories.values,
+                "kcal",
+                "Estimated Daily Calories"
+            );
+        }
+
+        else {
+            this._destroy(
+                "calories"
+            );
+        }
+    }
+
+
+    _dailyCalories(
+        items
+    ) {
+
+        const totalsByDate =
+            new Map();
+
+
+        for (
+            const item
+            of items
+        ) {
+
+            const value =
+                item.analytics
+                ?.calories
+                ?.dailyTotalKcal;
+
+            const date =
+                new Date(
+                    item.windowEnd
+                );
+
+
+            if (
+                value === undefined
+                || value === null
+                || Number.isNaN(
+                    date.getTime()
+                )
+            ) {
+                continue;
+            }
+
+
+            const label =
+                date.toLocaleDateString(
+                    "bs-BA",
+                    {
+                        day: "2-digit",
+                        month: "2-digit",
+                        timeZone:
+                            "Europe/Sarajevo"
+                    }
+                );
+
+            const numeric =
+                Number(
+                    value
+                );
+
+
+            if (
+                !Number.isFinite(
+                    numeric
+                )
+            ) {
+                continue;
+            }
+
+
+            const previous =
+                totalsByDate.get(
+                    label
+                );
+
+            if (
+                previous === undefined
+                || numeric > previous
+            ) {
+
+                totalsByDate.set(
+                    label,
+                    numeric
+                );
+            }
+        }
+
+
+        return {
+            labels: [
+                ...totalsByDate.keys()
+            ],
+            values: [
+                ...totalsByDate.values()
+            ]
+        };
     }
 
 

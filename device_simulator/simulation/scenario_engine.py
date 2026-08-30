@@ -68,6 +68,7 @@ class ScenarioEngine:
                 ),
                 steps_per_minute=0.0,
                 battery_drain_multiplier=0.8,
+                spo2_target_percentage=97.6,
             ),
 
             SimulationScenario.RESTING: ScenarioContext(
@@ -81,6 +82,7 @@ class ScenarioEngine:
                 ),
                 steps_per_minute=0.0,
                 battery_drain_multiplier=1.0,
+                spo2_target_percentage=98.0,
             ),
 
             SimulationScenario.WALKING: ScenarioContext(
@@ -94,6 +96,7 @@ class ScenarioEngine:
                 ),
                 steps_per_minute=105.0,
                 battery_drain_multiplier=1.25,
+                spo2_target_percentage=97.7,
             ),
 
             SimulationScenario.RUNNING: ScenarioContext(
@@ -107,6 +110,7 @@ class ScenarioEngine:
                 ),
                 steps_per_minute=170.0,
                 battery_drain_multiplier=1.7,
+                spo2_target_percentage=96.8,
             ),
 
             SimulationScenario.EXERCISING: ScenarioContext(
@@ -120,6 +124,7 @@ class ScenarioEngine:
                 ),
                 steps_per_minute=65.0,
                 battery_drain_multiplier=1.55,
+                spo2_target_percentage=96.6,
             ),
 
             SimulationScenario.RECOVERY: ScenarioContext(
@@ -133,6 +138,7 @@ class ScenarioEngine:
                 ),
                 steps_per_minute=0.0,
                 battery_drain_multiplier=1.15,
+                spo2_target_percentage=97.2,
             ),
 
             SimulationScenario.STRESS_EVENT: ScenarioContext(
@@ -146,6 +152,7 @@ class ScenarioEngine:
                 ),
                 steps_per_minute=0.0,
                 battery_drain_multiplier=1.05,
+                spo2_target_percentage=97.5,
             ),
 
             SimulationScenario.SENSOR_FAILURE: ScenarioContext(
@@ -177,6 +184,7 @@ class ScenarioEngine:
                 ),
                 steps_per_minute=0.0,
                 battery_drain_multiplier=2.5,
+                spo2_target_percentage=98.0,
                 force_low_battery=True,
             ),
 

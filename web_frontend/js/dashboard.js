@@ -285,9 +285,12 @@ export class DashboardView {
             measurements
             .oxygenSaturationPercentage;
 
+        const spo2Status =
+            statuses.spo2;
+
         if (
             spo2 !== undefined
-            && spo2 !== null
+            || spo2Status !== undefined
         ) {
 
             byId(
@@ -309,12 +312,50 @@ export class DashboardView {
                 decimals: 1,
 
                 status:
-                    statuses.spo2
+                    spo2Status
                     ?? "UNKNOWN",
 
                 timestamp,
 
                 tolerance: 0.1
+            });
+        }
+
+
+        const caloriesToday =
+            measurements
+            .caloriesBurnedToday;
+
+        if (
+            caloriesToday !== undefined
+            && caloriesToday !== null
+        ) {
+
+            byId(
+                "sensor-calories-card"
+            )?.classList.remove(
+                "hidden"
+            );
+
+            this._renderSensor({
+                prefix: "calories",
+                cardId:
+                    "sensor-calories-card",
+
+                value:
+                    caloriesToday,
+
+                previousKey:
+                    "calories",
+
+                decimals: 2,
+
+                status:
+                    "ESTIMATED",
+
+                timestamp,
+
+                tolerance: 0.01
             });
         }
     }

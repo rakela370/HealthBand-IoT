@@ -143,6 +143,18 @@ class ConfigurationUpdateRequest(BaseModel):
 
     analyticsEnabled: bool | None = None
 
+    # HealthBand 2.0.0 fields. The device remains the authoritative
+    # version-aware validator; the backend only validates basic shape/range.
+    spo2AlertsEnabled: bool | None = None
+
+    spo2MinimumThreshold: float | None = Field(
+        default=None,
+        ge=70.0,
+        le=100.0,
+    )
+
+    spo2MeasurementEnabled: bool | None = None
+
     @model_validator(
         mode="after"
     )

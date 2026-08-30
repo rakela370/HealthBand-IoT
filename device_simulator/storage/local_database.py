@@ -3,6 +3,7 @@
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -128,10 +129,64 @@ class LocalDatabase:
             rows
         )
 
+    def get_state(
+        self,
+        key: str,
+    ) -> str | None:
+        """Return one small persisted runtime-state value."""
+
+        row = self.fetch_one(
+            """
+            SELECT value
+            FROM local_state
+            WHERE key = ?
+            """,
+            (
+                key,
+            ),
+        )
+
+        if row is None:
+            return None
+
+        return str(
+            row["value"]
+        )
+
+    def set_state(
+        self,
+        key: str,
+        value: str,
+    ) -> None:
+        """Insert or replace one small persisted runtime-state value."""
+
+        with self.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO local_state (
+                    key,
+                    value,
+                    updated_at
+                )
+                VALUES (?, ?, ?)
+
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    key,
+                    value,
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat(),
+                ),
+            )
+
     def _initialize_schema(
         self,
     ) -> None:
-        """Create all Module 6 SQLite objects."""
+        """Create all HealthBand SQLite objects."""
 
         with self.connection() as connection:
             connection.executescript(
@@ -176,6 +231,12 @@ class LocalDatabase:
                     idx_offline_messages_type
                 ON offline_messages (
                     message_type
+                );
+
+                CREATE TABLE IF NOT EXISTS local_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
                 );
                 """
             )

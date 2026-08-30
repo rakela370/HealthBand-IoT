@@ -194,3 +194,83 @@ def test_dynamodb_conversion_removes_python_floats() -> None:
         ],
         Decimal,
     )
+
+
+def test_version2_history_contains_spo2_and_calorie_analytics() -> None:
+    end_time = datetime(
+        2026,
+        8,
+        24,
+        12,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    items = (
+        generate_history_items(
+            days=1,
+            device_id="test-device",
+            seed=3,
+            end_time=end_time,
+        )
+    )
+
+    assert all(
+        item[
+            "softwareVersion"
+        ]
+        == "2.0.0"
+        for item in items
+    )
+
+    assert any(
+        "spo2"
+        in item.get(
+            "analytics",
+            {},
+        )
+        for item in items
+    )
+
+    assert all(
+        "calories"
+        in item.get(
+            "analytics",
+            {},
+        )
+        for item in items
+    )
+
+    assert all(
+        item.get(
+            "analytics",
+            {}
+        )
+        .get(
+            "calories",
+            {}
+        )
+        .get(
+            "estimated"
+        )
+        is True
+        for item in items
+    )
+
+    assert all(
+        item.get(
+            "analytics",
+            {}
+        )
+        .get(
+            "calories",
+            {}
+        )
+        .get(
+            "dailyTotalKcal",
+            0
+        )
+        >= 0
+        for item in items
+    )

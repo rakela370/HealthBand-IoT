@@ -18,6 +18,9 @@ from device_simulator.device_health.resource_monitor import (
 from device_simulator.device_health.sensor_health_monitor import (
     SensorHealthMonitor,
 )
+from device_simulator.utils.versioning import (
+    is_at_least,
+)
 
 
 class DeviceHealthStatus(StrEnum):
@@ -67,7 +70,14 @@ class DeviceHealthReport:
         """Convert report into serializable dictionary."""
 
         return {
-            "schemaVersion": 1,
+            "schemaVersion": (
+                2
+                if is_at_least(
+                    self.software_version,
+                    "2.0.0",
+                )
+                else 1
+            ),
             "deviceId": (
                 self.device_id
             ),
@@ -138,6 +148,12 @@ class DeviceHealthMonitor:
         "LOCAL_ANALYTICS",
     )
 
+    VERSION_2_CAPABILITIES = (
+        *VERSION_1_CAPABILITIES,
+        "SPO2_MONITORING",
+        "CALORIE_ESTIMATION",
+    )
+
     def __init__(
         self,
         device_id: str,
@@ -172,10 +188,30 @@ class DeviceHealthMonitor:
             FaultManager()
         )
 
+    @property
+    def capabilities(
+        self,
+    ) -> tuple[str, ...]:
+        """Return capabilities supported by the active software version."""
+
+        if is_at_least(
+            self.software_version,
+            "2.0.0",
+        ):
+            return (
+                self.VERSION_2_CAPABILITIES
+            )
+
+        return (
+            self.VERSION_1_CAPABILITIES
+        )
+
     def record_fault(
         self,
         error: str,
     ) -> None:
+        """Record one technical device fault."""
+
         self.fault_manager.record(
             error
         )
@@ -281,7 +317,7 @@ class DeviceHealthMonitor:
                 resources.system_available_memory_mb
             ),
             capabilities=(
-                self.VERSION_1_CAPABILITIES
+                self.capabilities
             ),
             last_error=(
                 self.fault_manager.last_error

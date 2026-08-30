@@ -16,6 +16,9 @@ from device_simulator.sensors.heart_rate_sensor import (
 from device_simulator.sensors.skin_temperature_sensor import (
     SkinTemperatureSensor,
 )
+from device_simulator.sensors.spo2_sensor import (
+    SpO2Sensor,
+)
 from device_simulator.sensors.step_counter_sensor import (
     StepCounterSensor,
 )
@@ -27,6 +30,9 @@ from device_simulator.simulation.signal_generator import (
 )
 from device_simulator.simulation.user_profile import (
     UserProfile,
+)
+from device_simulator.utils.versioning import (
+    is_at_least,
 )
 
 
@@ -50,11 +56,17 @@ class SensorManager:
         self,
         user_profile: UserProfile | None = None,
         random_seed: int | None = None,
+        software_version: str = "1.0.0",
+        spo2_measurement_enabled: bool | None = None,
     ) -> None:
         profile = user_profile or UserProfile()
 
         generator = SignalGenerator(
             seed=random_seed
+        )
+
+        self.software_version = (
+            software_version
         )
 
         self._sensors: dict[
@@ -65,6 +77,14 @@ class SensorManager:
         self._scenario_failed_sensor: (
             str | None
         ) = None
+
+        self._spo2_measurement_enabled = (
+            True
+            if spo2_measurement_enabled is None
+            else bool(
+                spo2_measurement_enabled
+            )
+        )
 
         self.register(
             HeartRateSensor(
@@ -90,6 +110,21 @@ class SensorManager:
             BatteryModel()
         )
 
+        if is_at_least(
+            software_version,
+            "2.0.0",
+        ):
+            spo2_sensor = SpO2Sensor(
+                signal_generator=generator
+            )
+
+            self.register(
+                spo2_sensor
+            )
+
+            if not self._spo2_measurement_enabled:
+                spo2_sensor.disable()
+
     @property
     def sensors(
         self,
@@ -114,6 +149,16 @@ class SensorManager:
 
         self._sensors[sensor.name] = sensor
 
+    def has_sensor(
+        self,
+        name: str,
+    ) -> bool:
+        """Return whether a sensor is currently registered."""
+
+        return (
+            name in self._sensors
+        )
+
     def get_sensor(
         self,
         name: str,
@@ -127,6 +172,32 @@ class SensorManager:
             raise KeyError(
                 f"Unknown sensor '{name}'."
             ) from exc
+
+    def set_spo2_enabled(
+        self,
+        enabled: bool,
+    ) -> None:
+        """Enable or disable the HealthBand 2.0.0 SpO2 sensor."""
+
+        if not self.has_sensor(
+            "spo2"
+        ):
+            return
+
+        sensor = self.get_sensor(
+            "spo2"
+        )
+
+        self._spo2_measurement_enabled = (
+            bool(
+                enabled
+            )
+        )
+
+        if enabled:
+            sensor.enable()
+        else:
+            sensor.disable()
 
     def read_all(
         self,
@@ -191,9 +262,9 @@ class SensorManager:
             and self._scenario_failed_sensor
             != failed_sensor_name
         ):
-            self.get_sensor(
+            self._restore_sensor_status(
                 self._scenario_failed_sensor
-            ).restore()
+            )
 
             self._scenario_failed_sensor = None
 
@@ -224,15 +295,33 @@ class SensorManager:
     ) -> None:
         """Restore a selected sensor."""
 
-        self.get_sensor(
+        self._restore_sensor_status(
             name
-        ).restore()
+        )
 
         if (
             self._scenario_failed_sensor
             == name
         ):
             self._scenario_failed_sensor = None
+
+    def _restore_sensor_status(
+        self,
+        name: str,
+    ) -> None:
+        """Restore a sensor while preserving configuration-driven disablement."""
+
+        sensor = self.get_sensor(
+            name
+        )
+
+        sensor.restore()
+
+        if (
+            name == "spo2"
+            and not self._spo2_measurement_enabled
+        ):
+            sensor.disable()
 
     def sensor_statuses(
         self,

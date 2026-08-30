@@ -7,6 +7,9 @@ from device_simulator.configuration.device_config import (
     DeviceConfig,
     TemperatureUnit,
 )
+from device_simulator.utils.versioning import (
+    is_at_least,
+)
 
 
 class ConfigurationValidationError(ValueError):
@@ -30,7 +33,7 @@ class ConfigurationValidationError(ValueError):
 class ConfigurationValidator:
     """Validate Device Shadow desired configuration."""
 
-    _ALLOWED_TOP_LEVEL = {
+    _ALLOWED_TOP_LEVEL_V1 = {
         "measurementIntervalSec",
         "telemetryIntervalSec",
         "analyticsWindowSec",
@@ -41,6 +44,12 @@ class ConfigurationValidator:
         "offlineQueueMaximumItems",
         "activeUserProfile",
         "analyticsEnabled",
+    }
+
+    _VERSION_2_ONLY = {
+        "spo2AlertsEnabled",
+        "spo2MinimumThreshold",
+        "spo2MeasurementEnabled",
     }
 
     _ALLOWED_THRESHOLDS = {
@@ -59,22 +68,25 @@ class ConfigurationValidator:
         "sensorFailure",
     }
 
-    _VERSION_2_ONLY = {
-        "spo2AlertsEnabled",
-        "spo2MinimumThreshold",
-        "spo2MeasurementEnabled",
-    }
+    def __init__(
+        self,
+        software_version: str = "1.0.0",
+    ) -> None:
+        self.software_version = (
+            software_version
+        )
+
+        self.supports_spo2 = is_at_least(
+            software_version,
+            "2.0.0",
+        )
 
     def apply_delta(
         self,
         current: DeviceConfig,
         delta: dict[str, Any],
     ) -> DeviceConfig:
-        """
-        Merge partial desired state with current configuration.
-
-        The original configuration is never modified.
-        """
+        """Merge a partial desired state with the current configuration."""
 
         if not isinstance(
             delta,
@@ -88,14 +100,26 @@ class ConfigurationValidator:
 
         errors: list[str] = []
 
+        allowed_top_level = set(
+            self._ALLOWED_TOP_LEVEL_V1
+        )
+
+        if self.supports_spo2:
+            allowed_top_level.update(
+                self._VERSION_2_ONLY
+            )
+
         for key in delta:
-            if key in self._VERSION_2_ONLY:
+            if (
+                key in self._VERSION_2_ONLY
+                and not self.supports_spo2
+            ):
                 errors.append(
                     f"'{key}' is not supported "
-                    "by HealthBand version 1.0.0."
+                    f"by HealthBand version {self.software_version}."
                 )
 
-            elif key not in self._ALLOWED_TOP_LEVEL:
+            elif key not in allowed_top_level:
                 errors.append(
                     f"Unknown configuration field '{key}'."
                 )
@@ -117,11 +141,12 @@ class ConfigurationValidator:
 
         for field in simple_fields:
             if field in delta:
-                merged[
-                    field
-                ] = delta[
-                    field
-                ]
+                merged[field] = delta[field]
+
+        if self.supports_spo2:
+            for field in self._VERSION_2_ONLY:
+                if field in delta:
+                    merged[field] = delta[field]
 
         if "thresholds" in delta:
             thresholds = delta[
@@ -150,9 +175,7 @@ class ConfigurationValidator:
                     else:
                         merged[
                             "thresholds"
-                        ][key] = thresholds[
-                            key
-                        ]
+                        ][key] = thresholds[key]
 
         if "alerts" in delta:
             alerts = delta[
@@ -178,9 +201,7 @@ class ConfigurationValidator:
                     else:
                         merged[
                             "alerts"
-                        ][key] = alerts[
-                            key
-                        ]
+                        ][key] = alerts[key]
 
         self._validate_merged(
             merged,
@@ -291,6 +312,33 @@ class ConfigurationValidator:
                     "analyticsEnabled"
                 ]
             ),
+            spo2_alerts_enabled=(
+                bool(
+                    merged[
+                        "spo2AlertsEnabled"
+                    ]
+                )
+                if self.supports_spo2
+                else None
+            ),
+            spo2_minimum_threshold=(
+                float(
+                    merged[
+                        "spo2MinimumThreshold"
+                    ]
+                )
+                if self.supports_spo2
+                else None
+            ),
+            spo2_measurement_enabled=(
+                bool(
+                    merged[
+                        "spo2MeasurementEnabled"
+                    ]
+                )
+                if self.supports_spo2
+                else None
+            ),
         )
 
     def _validate_merged(
@@ -353,10 +401,15 @@ class ConfigurationValidator:
             "thresholds"
         )
 
-        if isinstance(
+        if not isinstance(
             thresholds,
             dict,
         ):
+            errors.append(
+                "thresholds must be an object."
+            )
+
+        else:
             self._validate_number(
                 thresholds.get(
                     "heartRateMinimumBpm"
@@ -467,10 +520,15 @@ class ConfigurationValidator:
             "alerts"
         )
 
-        if isinstance(
+        if not isinstance(
             alerts,
             dict,
         ):
+            errors.append(
+                "alerts must be an object."
+            )
+
+        else:
             for key in self._ALLOWED_ALERTS:
                 if not isinstance(
                     alerts.get(
@@ -527,6 +585,37 @@ class ConfigurationValidator:
                 "activeUserProfile must "
                 "be a non-empty string."
             )
+
+        if self.supports_spo2:
+            if not isinstance(
+                config.get(
+                    "spo2AlertsEnabled"
+                ),
+                bool,
+            ):
+                errors.append(
+                    "spo2AlertsEnabled must be boolean."
+                )
+
+            self._validate_number(
+                config.get(
+                    "spo2MinimumThreshold"
+                ),
+                "spo2MinimumThreshold",
+                errors,
+                minimum=70.0,
+                maximum=100.0,
+            )
+
+            if not isinstance(
+                config.get(
+                    "spo2MeasurementEnabled"
+                ),
+                bool,
+            ):
+                errors.append(
+                    "spo2MeasurementEnabled must be boolean."
+                )
 
     @staticmethod
     def _is_number(

@@ -12,6 +12,9 @@ from device_simulator.configuration.configuration_validator import (
 from device_simulator.configuration.device_config import (
     DeviceConfig,
 )
+from device_simulator.utils.versioning import (
+    is_at_least,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,19 +33,44 @@ class ConfigurationManager:
         self,
         default_config_path: Path | None = None,
         runtime_config_path: Path | None = None,
+        software_version: str = "1.0.0",
     ) -> None:
-        self._validator = (
-            ConfigurationValidator()
+        self.software_version = (
+            software_version
         )
 
-        self._default_config_path = (
-            default_config_path
-            or Path(
-                __file__
-            ).with_name(
-                "default_config.json"
+        self._supports_spo2 = is_at_least(
+            software_version,
+            "2.0.0",
+        )
+
+        self._validator = (
+            ConfigurationValidator(
+                software_version=(
+                    software_version
+                )
             )
         )
+
+        if default_config_path is not None:
+            self._default_config_path = (
+                default_config_path
+            )
+
+        else:
+            default_name = (
+                "default_config_v2.json"
+                if self._supports_spo2
+                else "default_config.json"
+            )
+
+            self._default_config_path = (
+                Path(
+                    __file__
+                ).with_name(
+                    default_name
+                )
+            )
 
         self._runtime_config_path = (
             runtime_config_path
@@ -98,10 +126,22 @@ class ConfigurationManager:
             errors=(),
         )
 
+    def _base_config(self) -> DeviceConfig:
+        """Return version-appropriate defaults used while merging stored state."""
+
+        if not self._supports_spo2:
+            return DeviceConfig()
+
+        return DeviceConfig(
+            spo2_alerts_enabled=True,
+            spo2_minimum_threshold=92.0,
+            spo2_measurement_enabled=True,
+        )
+
     def _load_initial_configuration(
         self,
     ) -> DeviceConfig:
-        """Load runtime config if available, otherwise defaults."""
+        """Load runtime config if available, otherwise version defaults."""
 
         source = (
             self._runtime_config_path
@@ -125,7 +165,9 @@ class ConfigurationManager:
         try:
             return (
                 self._validator.apply_delta(
-                    current=DeviceConfig(),
+                    current=(
+                        self._base_config()
+                    ),
                     delta=raw,
                 )
             )

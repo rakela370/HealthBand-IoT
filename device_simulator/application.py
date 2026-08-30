@@ -72,7 +72,7 @@ class HealthBandApplication:
                 device_id=(
                     mqtt_settings.client_id
                 ),
-                software_version="1.0.0",
+                software_version="2.0.0",
                 event_bus=(
                     self.event_bus
                 ),

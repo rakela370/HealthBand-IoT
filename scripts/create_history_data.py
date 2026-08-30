@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 from device_simulator.analytics.analytics_manager import (
     AnalyticsManager,
 )
+from device_simulator.analytics.calorie_estimator import (
+    CalorieEstimator,
+)
 from device_simulator.sensors.sensor_manager import (
     SensorManager,
 )
@@ -103,6 +106,9 @@ def generate_history_items(
     Generate hourly aggregate records using the real simulator models.
 
     One aggregate record is generated for every hour.
+
+    HealthBand 2.0.0 historical records include simulated SpO2 analytics
+    and derived estimated-calorie analytics.
     """
 
     if days <= 0:
@@ -151,6 +157,14 @@ def generate_history_items(
 
     user_profile = (
         UserProfile()
+    )
+
+    calorie_estimator = (
+        CalorieEstimator(
+            user_profile=(
+                user_profile
+            )
+        )
     )
 
     results: list[
@@ -204,6 +218,7 @@ def generate_history_items(
                     seed
                     + window_index
                 ),
+                software_version="2.0.0",
             )
         )
 
@@ -212,10 +227,12 @@ def generate_history_items(
                 device_id=(
                     device_id
                 ),
-                software_version="1.0.0",
+                software_version="2.0.0",
                 window_sec=float(
                     SAMPLES_PER_HOUR
                 ),
+                spo2_minimum_threshold=92.0,
+                spo2_enabled=True,
             )
         )
 
@@ -251,9 +268,35 @@ def generate_history_items(
                 )
             )
 
+            calorie_values = (
+                calorie_estimator
+                .estimate_interval(
+                    measurements=(
+                        snapshot.measurements
+                    ),
+                    activity_level=(
+                        snapshot.activity_level
+                    ),
+                    scenario=(
+                        snapshot.scenario
+                    ),
+                    elapsed_sec=(
+                        3600.0
+                        / SAMPLES_PER_HOUR
+                    ),
+                    timestamp=(
+                        historical_timestamp
+                    ),
+                )
+            )
+
             historical_snapshot = (
                 replace(
                     snapshot,
+                    measurements={
+                        **snapshot.measurements,
+                        **calorie_values,
+                    },
                     timestamp=(
                         historical_timestamp
                     ),
