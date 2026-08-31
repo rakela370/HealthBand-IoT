@@ -1,0 +1,61 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iot:Connect"
+            ],
+            "Resource": [
+                "arn:aws:iot:eu-central-1:748439418076:client/healthband-device-001-ota"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iot:Publish",
+                "iot:Receive"
+            ],
+            "Resource": [
+                "arn:aws:iot:eu-central-1:748439418076:topic/$aws/things/healthband-device-001/jobs/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iot:Subscribe"
+            ],
+            "Resource": [
+                "arn:aws:iot:eu-central-1:748439418076:topicfilter/$aws/things/healthband-device-001/jobs/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iot:Subscribe"
+            ],
+            "Resource": [
+                "arn:aws:iot:eu-central-1:748439418076:topicfilter/healthband/healthband-device-001/presence"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iot:Receive"
+            ],
+            "Resource": [
+                "arn:aws:iot:eu-central-1:748439418076:topic/healthband/healthband-device-001/presence"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iot:Publish"
+            ],
+            "Resource": [
+                "arn:aws:iot:eu-central-1:748439418076:topic/healthband/healthband-device-001/ota/status",
+                "arn:aws:iot:eu-central-1:748439418076:topic/healthband/healthband-device-001/events"
+            ]
+        }
+    ]
+}

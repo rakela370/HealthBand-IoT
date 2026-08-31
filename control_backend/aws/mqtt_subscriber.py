@@ -10,7 +10,9 @@ from collections.abc import (
 from typing import Any
 
 from awscrt import mqtt
-from awsiot import mqtt_connection_builder
+from awsiot import (
+    mqtt_connection_builder,
+)
 
 from control_backend.settings import (
     BackendSettings,
@@ -71,51 +73,67 @@ class BackendMqttSubscriber:
             ],
         ] = {
             (
-                f"healthband/{device_id}/telemetry"
+                f"healthband/"
+                f"{device_id}/telemetry"
             ): (
                 "telemetry",
                 0,
             ),
 
             (
-                f"healthband/{device_id}/analytics"
+                f"healthband/"
+                f"{device_id}/analytics"
             ): (
                 "analytics",
                 1,
             ),
 
             (
-                f"healthband/{device_id}/alerts"
+                f"healthband/"
+                f"{device_id}/alerts"
             ): (
                 "alert",
                 1,
             ),
 
             (
-                f"healthband/{device_id}/health"
+                f"healthband/"
+                f"{device_id}/health"
             ): (
                 "health",
                 1,
             ),
 
             (
-                f"healthband/{device_id}/events"
+                f"healthband/"
+                f"{device_id}/events"
             ): (
                 "event",
                 1,
             ),
 
             (
-                f"healthband/{device_id}/commands/response"
+                f"healthband/"
+                f"{device_id}/"
+                "commands/response"
             ): (
                 "command_response",
                 1,
             ),
 
             (
-                f"healthband/{device_id}/presence"
+                f"healthband/"
+                f"{device_id}/presence"
             ): (
                 "presence",
+                1,
+            ),
+
+            (
+                f"healthband/"
+                f"{device_id}/ota/status"
+            ): (
+                "ota",
                 1,
             ),
         }
@@ -124,8 +142,6 @@ class BackendMqttSubscriber:
     def is_connected(
         self,
     ) -> bool:
-        """Return MQTT subscriber connection state."""
-
         return (
             self._connected
         )
@@ -134,8 +150,6 @@ class BackendMqttSubscriber:
         self,
         loop: asyncio.AbstractEventLoop,
     ) -> None:
-        """Connect and subscribe to HealthBand realtime topics."""
-
         if self._connected:
             return
 
@@ -144,21 +158,24 @@ class BackendMqttSubscriber:
         )
 
         certificate = (
-            self.settings.resolve_path(
+            self.settings
+            .resolve_path(
                 self.settings
                 .backend_iot_cert_path
             )
         )
 
         private_key = (
-            self.settings.resolve_path(
+            self.settings
+            .resolve_path(
                 self.settings
                 .backend_iot_private_key_path
             )
         )
 
         root_ca = (
-            self.settings.resolve_path(
+            self.settings
+            .resolve_path(
                 self.settings
                 .backend_root_ca_path
             )
@@ -171,7 +188,8 @@ class BackendMqttSubscriber:
         ):
             if not path.is_file():
                 raise FileNotFoundError(
-                    f"Backend MQTT file does not exist: {path}"
+                    "Backend MQTT file "
+                    f"does not exist: {path}"
                 )
 
         self._connection = (
@@ -181,20 +199,14 @@ class BackendMqttSubscriber:
                     self.settings
                     .aws_iot_endpoint
                 ),
-                cert_filepath=(
-                    str(
-                        certificate
-                    )
+                cert_filepath=str(
+                    certificate
                 ),
-                pri_key_filepath=(
-                    str(
-                        private_key
-                    )
+                pri_key_filepath=str(
+                    private_key
                 ),
-                ca_filepath=(
-                    str(
-                        root_ca
-                    )
+                ca_filepath=str(
+                    root_ca
                 ),
                 client_id=(
                     self.settings
@@ -205,26 +217,26 @@ class BackendMqttSubscriber:
                 reconnect_min_timeout_secs=1,
                 reconnect_max_timeout_secs=32,
                 on_connection_interrupted=(
-                    self._on_connection_interrupted
+                    self
+                    ._on_connection_interrupted
                 ),
                 on_connection_resumed=(
-                    self._on_connection_resumed
+                    self
+                    ._on_connection_resumed
                 ),
             )
         )
 
         logger.info(
-            "Connecting backend MQTT subscriber "
-            "to AWS IoT Core."
+            "Connecting backend MQTT "
+            "subscriber to AWS IoT Core."
         )
 
         self._connection.connect().result(
             timeout=15
         )
 
-        self._connected = (
-            True
-        )
+        self._connected = True
 
         for (
             topic,
@@ -233,9 +245,9 @@ class BackendMqttSubscriber:
                 qos,
             ),
         ) in self._topics.items():
-
             future, _ = (
-                self._connection.subscribe(
+                self._connection
+                .subscribe(
                     topic=topic,
                     qos=self._to_qos(
                         qos
@@ -251,7 +263,8 @@ class BackendMqttSubscriber:
             )
 
             logger.info(
-                "Backend MQTT subscribed | topic=%s",
+                "Backend MQTT subscribed "
+                "| topic=%s",
                 topic,
             )
 
@@ -262,10 +275,9 @@ class BackendMqttSubscriber:
     def stop(
         self,
     ) -> None:
-        """Disconnect backend subscriber."""
-
         if (
-            self._connection is None
+            self._connection
+            is None
             or not self._connected
         ):
             return
@@ -274,9 +286,7 @@ class BackendMqttSubscriber:
             timeout=10
         )
 
-        self._connected = (
-            False
-        )
+        self._connected = False
 
         logger.info(
             "Backend MQTT subscriber disconnected."
@@ -291,8 +301,6 @@ class BackendMqttSubscriber:
         retain: bool,
         **kwargs: Any,
     ) -> None:
-        """Forward AWS MQTT callback to FastAPI asyncio loop."""
-
         del dup
         del qos
         del retain
@@ -315,11 +323,9 @@ class BackendMqttSubscriber:
         )
 
         try:
-            decoded = (
-                json.loads(
-                    payload.decode(
-                        "utf-8"
-                    )
+            decoded = json.loads(
+                payload.decode(
+                    "utf-8"
                 )
             )
 
@@ -328,20 +334,22 @@ class BackendMqttSubscriber:
                 dict,
             ):
                 raise ValueError(
-                    "MQTT payload must be JSON object."
+                    "MQTT payload must "
+                    "be JSON object."
                 )
 
         except Exception:
             logger.exception(
-                "Backend rejected malformed MQTT "
-                "message on topic %s.",
+                "Backend rejected malformed "
+                "MQTT message on topic %s.",
                 topic,
             )
 
             return
 
         future = (
-            asyncio.run_coroutine_threadsafe(
+            asyncio
+            .run_coroutine_threadsafe(
                 self.handler(
                     self.settings.device_id,
                     event_type,
@@ -375,19 +383,20 @@ class BackendMqttSubscriber:
         del connection
         del kwargs
 
-        self._connected = (
-            False
-        )
+        self._connected = False
 
         logger.warning(
-            "Backend MQTT connection interrupted: %s",
+            "Backend MQTT connection "
+            "interrupted: %s",
             error,
         )
 
     def _on_connection_resumed(
         self,
         connection: Any,
-        return_code: mqtt.ConnectReturnCode,
+        return_code: (
+            mqtt.ConnectReturnCode
+        ),
         session_present: bool,
         **kwargs: Any,
     ) -> None:
@@ -399,8 +408,8 @@ class BackendMqttSubscriber:
         )
 
         logger.info(
-            "Backend MQTT connection resumed | "
-            "sessionPresent=%s",
+            "Backend MQTT connection resumed "
+            "| sessionPresent=%s",
             session_present,
         )
 
@@ -414,9 +423,8 @@ class BackendMqttSubscriber:
             )
 
             future.add_done_callback(
-                lambda completed: (
+                lambda completed:
                     completed.result()
-                )
             )
 
     @staticmethod
@@ -425,9 +433,11 @@ class BackendMqttSubscriber:
     ) -> mqtt.QoS:
         if qos == 0:
             return (
-                mqtt.QoS.AT_MOST_ONCE
+                mqtt.QoS
+                .AT_MOST_ONCE
             )
 
         return (
-            mqtt.QoS.AT_LEAST_ONCE
+            mqtt.QoS
+            .AT_LEAST_ONCE
         )

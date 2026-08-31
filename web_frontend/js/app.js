@@ -102,7 +102,9 @@ const eventLog =
 
 
 const ota =
-    new OtaView();
+    new OtaView(
+        api
+    );
 
 
 let historyLoaded =
@@ -162,6 +164,10 @@ function handleRealtime(
                 .updatePresence(
                     data
                 );
+
+            ota.updateVersion(
+                data.softwareVersion
+            );
 
             break;
 
@@ -225,6 +231,15 @@ function handleRealtime(
 
 
         case "analytics":
+
+            break;
+
+
+        case "ota":
+
+            ota.handleRealtime(
+                data
+            );
 
             break;
 
@@ -467,6 +482,15 @@ async function navigate(
             await eventLog.load();
         }
 
+
+        if (
+            page
+            === "ota"
+        ) {
+
+            await ota.load();
+        }
+
     }
 
     catch (error) {
@@ -632,6 +656,17 @@ async function initialLoad() {
                 error => {
                     console.warn(
                         "Event log initial load:",
+                        error
+                    );
+                }
+            ),
+
+        ota
+            .load()
+            .catch(
+                error => {
+                    console.warn(
+                        "OTA initial load:",
                         error
                     );
                 }

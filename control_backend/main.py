@@ -2,8 +2,15 @@
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from contextlib import (
+    asynccontextmanager,
+)
+from pathlib import (
+    Path,
+)
+from typing import (
+    AsyncIterator,
+)
 
 import boto3
 from fastapi import (
@@ -14,6 +21,12 @@ from fastapi import (
 )
 from fastapi.middleware.cors import (
     CORSMiddleware,
+)
+from fastapi.responses import (
+    FileResponse,
+)
+from fastapi.staticfiles import (
+    StaticFiles,
 )
 
 from control_backend.api.command_routes import (
@@ -28,6 +41,9 @@ from control_backend.api.device_routes import (
 from control_backend.api.history_routes import (
     router as history_router,
 )
+from control_backend.api.ota_routes import (
+    router as ota_router,
+)
 from control_backend.aws.dynamodb_service import (
     DynamoDbService,
 )
@@ -36,6 +52,9 @@ from control_backend.aws.iot_data_client import (
 )
 from control_backend.aws.mqtt_subscriber import (
     BackendMqttSubscriber,
+)
+from control_backend.aws.ota_service import (
+    OtaService,
 )
 from control_backend.aws.shadow_service import (
     ShadowService,
@@ -59,6 +78,24 @@ logger = logging.getLogger(
 )
 
 
+PROJECT_ROOT = (
+    Path(__file__)
+    .resolve()
+    .parent
+    .parent
+)
+
+FRONTEND_DIR = (
+    PROJECT_ROOT
+    / "web_frontend"
+)
+
+FRONTEND_INDEX = (
+    FRONTEND_DIR
+    / "index.html"
+)
+
+
 @asynccontextmanager
 async def lifespan(
     app: FastAPI,
@@ -72,11 +109,14 @@ async def lifespan(
     logging.basicConfig(
         level=getattr(
             logging,
-            settings.log_level.upper(),
+            settings
+            .log_level
+            .upper(),
             logging.INFO,
         ),
         format=(
-            "%(asctime)s | %(levelname)s | "
+            "%(asctime)s | "
+            "%(levelname)s | "
             "%(name)s | %(message)s"
         ),
     )
@@ -97,10 +137,8 @@ async def lifespan(
             settings.profile_name
         )
 
-    aws_session = (
-        boto3.Session(
-            **session_kwargs
-        )
+    aws_session = boto3.Session(
+        **session_kwargs
     )
 
     dynamodb_resource = (
@@ -117,6 +155,24 @@ async def lifespan(
                 + settings
                 .aws_iot_endpoint
             ),
+        )
+    )
+
+    s3_client = (
+        aws_session.client(
+            "s3"
+        )
+    )
+
+    iot_management_client = (
+        aws_session.client(
+            "iot"
+        )
+    )
+
+    sts_client = (
+        aws_session.client(
+            "sts"
         )
     )
 
@@ -149,6 +205,21 @@ async def lifespan(
         )
     )
 
+    ota_service = (
+        OtaService(
+            settings=settings,
+            s3_client=(
+                s3_client
+            ),
+            iot_client=(
+                iot_management_client
+            ),
+            sts_client=(
+                sts_client
+            ),
+        )
+    )
+
     realtime_store = (
         RealtimeStateStore()
     )
@@ -169,43 +240,27 @@ async def lifespan(
         payload: dict,
     ) -> None:
         await realtime_store.update(
-            device_id=(
-                device_id
-            ),
-            event_type=(
-                event_type
-            ),
-            payload=(
-                payload
-            ),
+            device_id=device_id,
+            event_type=event_type,
+            payload=payload,
         )
 
         await broadcaster.broadcast(
-            device_id=(
-                device_id
-            ),
-            event_type=(
-                event_type
-            ),
-            data=(
-                payload
-            ),
+            device_id=device_id,
+            event_type=event_type,
+            data=payload,
         )
 
     mqtt_subscriber = (
         BackendMqttSubscriber(
-            settings=(
-                settings
-            ),
+            settings=settings,
             handler=(
                 handle_realtime_message
             ),
         )
     )
 
-    app.state.settings = (
-        settings
-    )
+    app.state.settings = settings
 
     app.state.dynamodb_service = (
         dynamodb_service
@@ -217,6 +272,10 @@ async def lifespan(
 
     app.state.shadow_service = (
         shadow_service
+    )
+
+    app.state.ota_service = (
+        ota_service
     )
 
     app.state.realtime_store = (
@@ -236,10 +295,12 @@ async def lifespan(
     )
 
     if (
-        settings.backend_mqtt_enabled
+        settings
+        .backend_mqtt_enabled
     ):
         loop = (
-            asyncio.get_running_loop()
+            asyncio
+            .get_running_loop()
         )
 
         await asyncio.to_thread(
@@ -248,7 +309,8 @@ async def lifespan(
         )
 
     logger.info(
-        "HealthBand FastAPI backend started."
+        "HealthBand FastAPI "
+        "backend started."
     )
 
     try:
@@ -256,7 +318,8 @@ async def lifespan(
 
     finally:
         if (
-            settings.backend_mqtt_enabled
+            settings
+            .backend_mqtt_enabled
         ):
             try:
                 await asyncio.to_thread(
@@ -270,20 +333,22 @@ async def lifespan(
                 )
 
         logger.info(
-            "HealthBand FastAPI backend stopped."
+            "HealthBand FastAPI "
+            "backend stopped."
         )
 
 
 app = FastAPI(
-    title="HealthBand Control API",
-    version="1.0.0",
+    title=(
+        "HealthBand Control API"
+    ),
+    version="1.1.0",
     description=(
-        "Backend API for the simulated HealthBand "
+        "Backend API for the "
+        "simulated HealthBand "
         "IoT diploma project."
     ),
-    lifespan=(
-        lifespan
-    ),
+    lifespan=lifespan,
 )
 
 
@@ -324,6 +389,72 @@ app.include_router(
     history_router
 )
 
+app.include_router(
+    ota_router
+)
+
+
+if not FRONTEND_DIR.is_dir():
+    raise RuntimeError(
+        "HealthBand frontend directory "
+        f"does not exist: {FRONTEND_DIR}"
+    )
+
+
+if not FRONTEND_INDEX.is_file():
+    raise RuntimeError(
+        "HealthBand frontend index.html "
+        f"does not exist: {FRONTEND_INDEX}"
+    )
+
+
+app.mount(
+    "/css",
+    StaticFiles(
+        directory=(
+            FRONTEND_DIR
+            / "css"
+        )
+    ),
+    name="frontend-css",
+)
+
+
+app.mount(
+    "/js",
+    StaticFiles(
+        directory=(
+            FRONTEND_DIR
+            / "js"
+        )
+    ),
+    name="frontend-js",
+)
+
+
+app.mount(
+    "/assets",
+    StaticFiles(
+        directory=(
+            FRONTEND_DIR
+            / "assets"
+        )
+    ),
+    name="frontend-assets",
+)
+
+
+@app.get(
+    "/",
+    include_in_schema=False,
+)
+async def frontend_index() -> FileResponse:
+    """Serve the HealthBand web dashboard."""
+
+    return FileResponse(
+        FRONTEND_INDEX
+    )
+
 
 @app.get(
     "/api/backend/health",
@@ -334,7 +465,7 @@ app.include_router(
 async def backend_health(
     request: Request,
 ) -> dict[str, object]:
-    """Return FastAPI backend technical status."""
+    """Return backend technical status."""
 
     subscriber = (
         request.app.state
@@ -342,23 +473,25 @@ async def backend_health(
     )
 
     return {
-        "status": "OK",
-        "service": (
-            "HealthBand Control Backend"
-        ),
-        "mqttSubscriberEnabled": (
+        "status":
+            "OK",
+
+        "service":
+            "HealthBand Control Backend",
+
+        "mqttSubscriberEnabled":
             request.app.state
             .settings
-            .backend_mqtt_enabled
-        ),
-        "mqttSubscriberConnected": (
-            subscriber.is_connected
-        ),
-        "deviceId": (
+            .backend_mqtt_enabled,
+
+        "mqttSubscriberConnected":
+            subscriber
+            .is_connected,
+
+        "deviceId":
             request.app.state
             .settings
-            .device_id
-        ),
+            .device_id,
     }
 
 
@@ -369,7 +502,7 @@ async def device_websocket(
     websocket: WebSocket,
     device_id: str,
 ) -> None:
-    """Stream realtime HealthBand updates to browser clients."""
+    """Stream realtime HealthBand updates to browser."""
 
     settings = (
         websocket.app.state
@@ -410,25 +543,27 @@ async def device_websocket(
 
         await websocket.send_json(
             {
-                "type": (
-                    "initial_snapshot"
-                ),
-                "deviceId": (
-                    device_id
-                ),
-                "data": (
-                    snapshot
-                ),
+                "type":
+                    "initial_snapshot",
+
+                "deviceId":
+                    device_id,
+
+                "data":
+                    snapshot,
             }
         )
 
         while True:
             message = (
-                await websocket.receive_text()
+                await websocket
+                .receive_text()
             )
 
             if (
-                message.strip().lower()
+                message
+                .strip()
+                .lower()
                 == "ping"
             ):
                 await websocket.send_json(

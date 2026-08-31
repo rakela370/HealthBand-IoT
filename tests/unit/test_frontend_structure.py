@@ -38,6 +38,7 @@ def test_main_frontend_files_exist() -> None:
         "css/layout.css",
         "css/components.css",
         "css/animations.css",
+        "css/ota.css",
         "js/api.js",
         "js/websocket.js",
         "js/dashboard.js",
@@ -47,6 +48,7 @@ def test_main_frontend_files_exist() -> None:
         "js/commands.js",
         "js/device_health.js",
         "js/event_log.js",
+        "js/ota.js",
         "js/app.js",
         "assets/vendor/chart.umd.min.js",
     ]
@@ -226,3 +228,132 @@ def test_version2_frontend_hooks_are_present() -> None:
         "SPO2_MONITORING"
         in configuration
     )
+
+
+def test_module12_ota_frontend_is_fully_wired() -> None:
+    html = (
+        read(
+            "index.html"
+        )
+    )
+
+    api = (
+        read(
+            "js/api.js"
+        )
+    )
+
+    app = (
+        read(
+            "js/app.js"
+        )
+    )
+
+    ota = (
+        read(
+            "js/ota.js"
+        )
+    )
+
+    required_ids = [
+        "ota-refresh",
+        "ota-current-version",
+        "ota-job-status",
+        "ota-target-version",
+        "ota-release-list",
+        "ota-selected-version",
+        "ota-install-button",
+        "ota-progress-phase",
+        "ota-progress-percent",
+        "ota-progress-fill",
+        "ota-progress-steps",
+        "ota-job-id",
+        "ota-self-test",
+        "ota-rollback",
+        "ota-status-message",
+        "ota-job-log",
+    ]
+
+    for value in required_ids:
+        assert (
+            value
+            in html
+        )
+
+    assert (
+        "css/ota.css"
+        in html
+    )
+
+    assert (
+        "getOtaState"
+        in api
+    )
+
+    assert (
+        "startOta"
+        in api
+    )
+
+    assert (
+        "targetVersion"
+        in api
+    )
+
+    assert (
+        'case "ota"'
+        in app
+    )
+
+    assert (
+        "ota.handleRealtime"
+        in app
+    )
+
+    assert (
+        "await ota.load()"
+        in app
+    )
+
+    assert (
+        "AWS IoT Job"
+        in ota
+    )
+
+    assert (
+        "ROLLING_BACK"
+        in ota
+    )
+
+    assert (
+        "SELF_TEST"
+        in ota
+    )
+
+    assert (
+        "COMPLETED"
+        in ota
+    )
+
+
+def test_module12_placeholder_is_not_present() -> None:
+    html = (
+        read(
+            "index.html"
+        )
+    )
+
+    forbidden = [
+        "OTA frontend is prepared",
+        "No release available yet",
+        (
+            "AWS IoT Jobs biće implementirani "
+            "u narednim modulima"
+        ),
+    ]
+
+    for value in forbidden:
+        assert (
+            value
+            not in html
+        )

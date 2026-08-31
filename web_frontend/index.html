@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="bs">
 <head>
     <meta charset="UTF-8">
@@ -28,6 +28,11 @@
     <link
         rel="stylesheet"
         href="css/animations.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="css/ota.css"
     >
 </head>
 
@@ -192,7 +197,10 @@
         </header>
 
 
-        <div id="global-error" class="global-error hidden"></div>
+        <div
+            id="global-error"
+            class="global-error hidden"
+        ></div>
 
 
         <!-- DASHBOARD -->
@@ -379,6 +387,7 @@
                     </div>
 
                     <div class="sensor-reading">
+
                         <span id="sensor-temperature-value">
                             —
                         </span>
@@ -389,6 +398,7 @@
                         >
                             —
                         </span>
+
                     </div>
 
                     <div class="sensor-footer">
@@ -412,6 +422,7 @@
                 >
 
                     <div class="sensor-card-top">
+
                         <span class="sensor-symbol">
                             ↗
                         </span>
@@ -422,6 +433,7 @@
                         >
                             —
                         </span>
+
                     </div>
 
                     <div class="sensor-name">
@@ -429,6 +441,7 @@
                     </div>
 
                     <div class="sensor-reading">
+
                         <span id="sensor-steps-value">
                             —
                         </span>
@@ -436,6 +449,7 @@
                         <span class="sensor-unit">
                             steps
                         </span>
+
                     </div>
 
                     <div class="sensor-footer">
@@ -459,6 +473,7 @@
                 >
 
                     <div class="sensor-card-top">
+
                         <span class="sensor-symbol">
                             ▰
                         </span>
@@ -469,6 +484,7 @@
                         >
                             —
                         </span>
+
                     </div>
 
                     <div class="sensor-name">
@@ -476,6 +492,7 @@
                     </div>
 
                     <div class="sensor-reading">
+
                         <span id="sensor-battery-value">
                             —
                         </span>
@@ -483,6 +500,7 @@
                         <span class="sensor-unit">
                             %
                         </span>
+
                     </div>
 
                     <div class="sensor-footer">
@@ -609,6 +627,7 @@
                 <article class="panel">
 
                     <div class="panel-heading">
+
                         <div>
                             <div class="eyebrow">
                                 ACTIVITY
@@ -625,6 +644,7 @@
                         >
                             —
                         </span>
+
                     </div>
 
                     <div
@@ -708,6 +728,34 @@
 
                     <div class="watch-strap watch-strap-top"></div>
 
+                    <div
+                        id="watch-page-navigation"
+                        class="watch-page-navigation hidden"
+                    >
+
+                        <button
+                            id="watch-prev-screen"
+                            class="watch-page-arrow hidden"
+                            type="button"
+                            aria-label="Prethodni ekran narukvice"
+                            title="Prethodni ekran"
+                        >
+                            ‹
+                        </button>
+
+                        <button
+                            id="watch-next-screen"
+                            class="watch-page-arrow"
+                            type="button"
+                            aria-label="Sljedeći ekran narukvice"
+                            title="Sljedeći ekran"
+                        >
+                            ›
+                        </button>
+
+                    </div>
+
+
                     <div class="watch-body">
 
                         <div class="watch-screen">
@@ -718,74 +766,314 @@
                                     HealthBand
                                 </span>
 
-                                <span id="watch-battery">
-                                    — %
+                                <span
+                                    id="watch-battery-group"
+                                    class="watch-battery-group"
+                                >
+
+                                    <span id="watch-battery">
+                                        — %
+                                    </span>
+
+                                    <span
+                                        id="watch-charging-indicator"
+                                        class="watch-charging-indicator hidden"
+                                        aria-label="Uređaj se puni"
+                                        title="Charging"
+                                    >
+
+                                        <svg
+                                            viewBox="0 0 20 20"
+                                            aria-hidden="true"
+                                        >
+                                            <path
+                                                d="M11.4 1.5 4.8 10h4.4l-.7 8.5 6.7-9.4h-4.4l.6-7.6Z"
+                                            ></path>
+                                        </svg>
+
+                                    </span>
+
                                 </span>
 
                             </div>
 
-                            <div
-                                id="watch-heart"
-                                class="watch-heart"
-                            >
-                                ♥
-                            </div>
 
-                            <div
-                                id="watch-heart-rate"
-                                class="watch-heart-rate"
-                            >
-                                —
-                            </div>
+                            <div class="watch-pages">
 
-                            <div class="watch-unit">
-                                BPM
-                            </div>
+                                <div
+                                    id="watch-pages-track"
+                                    class="watch-pages-track"
+                                >
 
-                            <div class="watch-bottom-grid">
+                                    <!-- GLAVNI EKRAN -->
+                                    <div
+                                        class="watch-page watch-page-primary"
+                                    >
 
-                                <div>
-                                    <span class="watch-small-label">
-                                        Steps
-                                    </span>
+                                        <div
+                                            id="watch-heart"
+                                            class="watch-heart"
+                                        >
+                                            ♥
+                                        </div>
 
-                                    <strong id="watch-steps">
-                                        —
-                                    </strong>
+                                        <div
+                                            id="watch-heart-rate"
+                                            class="watch-heart-rate"
+                                        >
+                                            —
+                                        </div>
+
+                                        <div class="watch-unit">
+                                            BPM
+                                        </div>
+
+
+                                        <!-- V1.0 -->
+                                        <div
+                                            id="watch-v1-bottom-grid"
+                                            class="watch-bottom-grid"
+                                        >
+
+                                            <div>
+
+                                                <span class="watch-small-label">
+                                                    Steps
+                                                </span>
+
+                                                <strong id="watch-steps">
+                                                    —
+                                                </strong>
+
+                                            </div>
+
+
+                                            <div>
+
+                                                <span class="watch-small-label">
+                                                    Activity
+                                                </span>
+
+                                                <strong id="watch-activity">
+                                                    —
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+
+                                        <!-- V2.0 -->
+                                        <div
+                                            id="watch-v2-bottom-grid"
+                                            class="watch-v2-bottom-grid hidden"
+                                        >
+
+                                            <div class="watch-v2-left-stack">
+
+                                                <div class="watch-v2-metric-card">
+
+                                                    <span class="watch-small-label">
+                                                        Steps
+                                                    </span>
+
+                                                    <strong id="watch-v2-steps">
+                                                        —
+                                                    </strong>
+
+                                                </div>
+
+
+                                                <div
+                                                    id="watch-spo2-row"
+                                                    class="watch-v2-metric-card watch-v2-spo2-card"
+                                                >
+
+                                                    <span class="watch-small-label">
+                                                        SpO₂
+                                                    </span>
+
+                                                    <strong>
+
+                                                        <span id="watch-spo2">
+                                                            —
+                                                        </span>
+
+                                                        <small>
+                                                            %
+                                                        </small>
+
+                                                    </strong>
+
+                                                </div>
+
+                                            </div>
+
+
+                                            <div class="watch-v2-activity-card">
+
+                                                <span class="watch-small-label">
+                                                    Activity
+                                                </span>
+
+                                                <strong id="watch-v2-activity">
+                                                    —
+                                                </strong>
+
+                                                <span class="watch-v2-activity-dot"></span>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+
+                                    <!-- DRUGI EKRAN V2.0 -->
+                                    <div
+                                        class="watch-page watch-page-secondary"
+                                    >
+
+                                        <div class="watch-secondary-kicker">
+                                            Daily activity
+                                        </div>
+
+
+                                        <div
+                                            id="watch-calories-row"
+                                            class="watch-calorie-meter"
+                                        >
+
+                                            <div class="watch-calorie-ring"></div>
+
+                                            <div class="watch-calorie-content">
+
+                                                <svg
+                                                    class="watch-calorie-icon"
+                                                    viewBox="0 0 48 48"
+                                                    aria-hidden="true"
+                                                >
+                                                    <path
+                                                        d="M27.8 4.5c1.2 8.1-5.4 10.8-5.4 16.2 0 2.7 1.7 4.3 3.8 4.3 3.4 0 5.7-3.2 4.8-8.2 5.9 4.1 9.2 9.5 9.2 15.2 0 7.1-6.7 12-16 12S8 39 8 31.1c0-6.5 4.2-12.2 10.8-17.1-.4 5.5 1.8 8.4 4.2 8.4 4 0 2-8.9 4.8-17.9Z"
+                                                    ></path>
+                                                </svg>
+
+                                                <strong id="watch-calories">
+                                                    —
+                                                </strong>
+
+                                                <span>
+                                                    kcal today
+                                                </span>
+
+                                            </div>
+
+                                        </div>
+
+
+                                        <div class="watch-secondary-steps-card">
+
+                                            <div class="watch-step-icon">
+
+                                                <svg
+                                                    viewBox="0 0 48 48"
+                                                    aria-hidden="true"
+                                                >
+
+                                                    <ellipse
+                                                        cx="17"
+                                                        cy="29"
+                                                        rx="6"
+                                                        ry="10"
+                                                        transform="rotate(-18 17 29)"
+                                                    ></ellipse>
+
+                                                    <circle
+                                                        cx="11"
+                                                        cy="14"
+                                                        r="2.4"
+                                                    ></circle>
+
+                                                    <circle
+                                                        cx="16"
+                                                        cy="11"
+                                                        r="2.2"
+                                                    ></circle>
+
+                                                    <circle
+                                                        cx="21"
+                                                        cy="12"
+                                                        r="2"
+                                                    ></circle>
+
+                                                    <ellipse
+                                                        cx="32"
+                                                        cy="24"
+                                                        rx="5.5"
+                                                        ry="9"
+                                                        transform="rotate(20 32 24)"
+                                                    ></ellipse>
+
+                                                    <circle
+                                                        cx="27"
+                                                        cy="9"
+                                                        r="2.1"
+                                                    ></circle>
+
+                                                    <circle
+                                                        cx="32"
+                                                        cy="7"
+                                                        r="2"
+                                                    ></circle>
+
+                                                    <circle
+                                                        cx="37"
+                                                        cy="9"
+                                                        r="1.8"
+                                                    ></circle>
+
+                                                </svg>
+
+                                            </div>
+
+
+                                            <div>
+
+                                                <span class="watch-small-label">
+                                                    Steps today
+                                                </span>
+
+                                                <strong id="watch-secondary-steps">
+                                                    —
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
                                 </div>
 
-                                <div>
-                                    <span class="watch-small-label">
-                                        Activity
-                                    </span>
-
-                                    <strong id="watch-activity">
-                                        —
-                                    </strong>
-                                </div>
-
                             </div>
 
-                            <div
-                                id="watch-spo2-row"
-                                class="watch-spo2 hidden"
-                            >
-                                SpO₂
-                                <strong id="watch-spo2">
-                                    —
-                                </strong>
-                                %
-                            </div>
 
                             <div
-                                id="watch-calories-row"
-                                class="watch-spo2 hidden"
+                                id="watch-page-dots"
+                                class="watch-page-dots hidden"
+                                aria-hidden="true"
                             >
-                                Estimated
-                                <strong id="watch-calories">
-                                    —
-                                </strong>
-                                kcal today
+
+                                <span
+                                    id="watch-page-dot-1"
+                                    class="watch-page-dot active"
+                                ></span>
+
+                                <span
+                                    id="watch-page-dot-2"
+                                    class="watch-page-dot"
+                                ></span>
+
                             </div>
 
                         </div>
@@ -824,10 +1112,12 @@
                     <div class="battery-visual">
 
                         <div class="battery-track">
+
                             <div
                                 id="simulation-battery-fill"
                                 class="battery-fill"
                             ></div>
+
                         </div>
 
                         <span id="simulation-battery-label">
@@ -839,6 +1129,7 @@
                     <div class="simulation-meta">
 
                         <div>
+
                             <span>
                                 Device state
                             </span>
@@ -846,9 +1137,11 @@
                             <strong id="simulation-device-state">
                                 —
                             </strong>
+
                         </div>
 
                         <div>
+
                             <span>
                                 Last reading
                             </span>
@@ -856,6 +1149,7 @@
                             <strong id="simulation-time">
                                 —
                             </strong>
+
                         </div>
 
                     </div>
@@ -1029,6 +1323,7 @@
 
                 </article>
 
+
                 <article class="overview-card">
 
                     <div class="overview-label">
@@ -1043,6 +1338,7 @@
                     </div>
 
                 </article>
+
 
                 <article class="overview-card">
 
@@ -1070,6 +1366,7 @@
                 <div class="form-section">
 
                     <div>
+
                         <div class="eyebrow">
                             INTERVALS
                         </div>
@@ -1077,7 +1374,9 @@
                         <h3>
                             Sampling and reporting
                         </h3>
+
                     </div>
+
 
                     <div class="form-grid">
 
@@ -1093,6 +1392,7 @@
                             >
                         </label>
 
+
                         <label>
                             Telemetry interval (s)
 
@@ -1104,6 +1404,7 @@
                                 required
                             >
                         </label>
+
 
                         <label>
                             Analytics window (s)
@@ -1117,6 +1418,7 @@
                             >
                         </label>
 
+
                         <label>
                             Health report interval (s)
 
@@ -1129,6 +1431,7 @@
                             >
                         </label>
 
+
                         <label>
                             Temperature unit
 
@@ -1136,6 +1439,7 @@
                                 id="config-temperature-unit"
                                 required
                             >
+
                                 <option value="CELSIUS">
                                     Celsius
                                 </option>
@@ -1143,8 +1447,11 @@
                                 <option value="FAHRENHEIT">
                                     Fahrenheit
                                 </option>
+
                             </select>
+
                         </label>
+
 
                         <label>
                             Offline queue maximum
@@ -1166,6 +1473,7 @@
                 <div class="form-section">
 
                     <div>
+
                         <div class="eyebrow">
                             THRESHOLDS
                         </div>
@@ -1173,7 +1481,9 @@
                         <h3>
                             Demonstration thresholds
                         </h3>
+
                     </div>
+
 
                     <div class="form-grid">
 
@@ -1190,6 +1500,7 @@
                             >
                         </label>
 
+
                         <label>
                             Maximum resting heart rate (BPM)
 
@@ -1202,6 +1513,7 @@
                                 required
                             >
                         </label>
+
 
                         <label>
                             Minimum skin temperature (°C)
@@ -1216,6 +1528,7 @@
                             >
                         </label>
 
+
                         <label>
                             Maximum skin temperature (°C)
 
@@ -1229,6 +1542,7 @@
                             >
                         </label>
 
+
                         <label>
                             Low battery threshold (%)
 
@@ -1241,6 +1555,7 @@
                                 required
                             >
                         </label>
+
 
                         <label>
                             Active user profile
@@ -1260,6 +1575,7 @@
                 <div class="form-section">
 
                     <div>
+
                         <div class="eyebrow">
                             FEATURES
                         </div>
@@ -1267,7 +1583,9 @@
                         <h3>
                             Alerts and analytics
                         </h3>
+
                     </div>
+
 
                     <div class="switch-grid">
 
@@ -1279,6 +1597,7 @@
                             All alerts enabled
                         </label>
 
+
                         <label class="switch-row">
                             <input
                                 id="config-heart-alerts"
@@ -1286,6 +1605,7 @@
                             >
                             Heart rate alerts
                         </label>
+
 
                         <label class="switch-row">
                             <input
@@ -1295,6 +1615,7 @@
                             Temperature alerts
                         </label>
 
+
                         <label class="switch-row">
                             <input
                                 id="config-battery-alerts"
@@ -1303,6 +1624,7 @@
                             Battery alerts
                         </label>
 
+
                         <label class="switch-row">
                             <input
                                 id="config-sensor-alerts"
@@ -1310,6 +1632,7 @@
                             >
                             Sensor failure alerts
                         </label>
+
 
                         <label class="switch-row">
                             <input
@@ -1330,6 +1653,7 @@
                 >
 
                     <div>
+
                         <div class="eyebrow">
                             HEALTHBAND 2.0.0
                         </div>
@@ -1337,7 +1661,9 @@
                         <h3>
                             SpO₂ configuration
                         </h3>
+
                     </div>
+
 
                     <div class="form-grid">
 
@@ -1355,25 +1681,34 @@
 
                     </div>
 
+
                     <div class="switch-grid">
 
                         <label class="switch-row">
+
                             <input
                                 id="config-spo2-enabled"
                                 type="checkbox"
                             >
+
                             SpO₂ measurement enabled
+
                         </label>
 
+
                         <label class="switch-row">
+
                             <input
                                 id="config-spo2-alerts"
                                 type="checkbox"
                             >
+
                             SpO₂ alerts enabled
+
                         </label>
 
                     </div>
+
 
                     <p class="muted">
                         SpO₂ values are simulated demonstration data.
@@ -1409,13 +1744,24 @@
             <div class="shadow-json-grid">
 
                 <article class="panel">
-                    <h3>Desired</h3>
+
+                    <h3>
+                        Desired
+                    </h3>
+
                     <pre id="configuration-desired-json">{}</pre>
+
                 </article>
 
+
                 <article class="panel">
-                    <h3>Reported</h3>
+
+                    <h3>
+                        Reported
+                    </h3>
+
                     <pre id="configuration-reported-json">{}</pre>
+
                 </article>
 
             </div>
@@ -1432,6 +1778,7 @@
             <div class="section-heading">
 
                 <div>
+
                     <div class="eyebrow">
                         MQTT COMMANDS
                     </div>
@@ -1439,6 +1786,7 @@
                     <h2>
                         Device Commands
                     </h2>
+
                 </div>
 
             </div>
@@ -1524,6 +1872,7 @@
                             </option>
 
                         </select>
+
                     </label>
 
 
@@ -1624,7 +1973,6 @@
                                 max="300"
                                 value="20"
                             >
-
                         </label>
 
                     </div>
@@ -1653,6 +2001,7 @@
                     <div class="panel-heading">
 
                         <div>
+
                             <div class="eyebrow">
                                 COMMAND LIFECYCLE
                             </div>
@@ -1660,15 +2009,18 @@
                             <h3>
                                 Recent commands
                             </h3>
+
                         </div>
 
                     </div>
+
 
                     <div class="table-wrapper">
 
                         <table class="data-table">
 
                             <thead>
+
                                 <tr>
                                     <th>Command</th>
                                     <th>commandId</th>
@@ -1676,17 +2028,21 @@
                                     <th>Status</th>
                                     <th>Result</th>
                                 </tr>
+
                             </thead>
+
 
                             <tbody id="command-table-body">
 
                                 <tr>
+
                                     <td
                                         colspan="5"
                                         class="empty-cell"
                                     >
                                         Još nema poslatih komandi.
                                     </td>
+
                                 </tr>
 
                             </tbody>
@@ -1711,6 +2067,7 @@
             <div class="section-heading">
 
                 <div>
+
                     <div class="eyebrow">
                         TECHNICAL HEALTH
                     </div>
@@ -1718,6 +2075,7 @@
                     <h2>
                         Device Health
                     </h2>
+
                 </div>
 
                 <button
@@ -1818,8 +2176,7 @@
                     <div
                         id="health-capabilities"
                         class="tag-list"
-                    >
-                    </div>
+                    ></div>
 
                     <div class="health-error-block">
 
@@ -1849,51 +2206,285 @@
             <div class="section-heading">
 
                 <div>
+
                     <div class="eyebrow">
-                        OVER-THE-AIR UPDATE
+                        AWS IOT JOBS · PRIVATE S3
                     </div>
 
                     <h2>
                         OTA Update
                     </h2>
+
                 </div>
+
+                <button
+                    id="ota-refresh"
+                    class="button button-secondary"
+                    type="button"
+                >
+                    Refresh OTA state
+                </button>
 
             </div>
 
 
-            <article class="panel ota-placeholder">
+            <div class="ota-dashboard">
 
-                <div class="ota-version-circle">
-                    <span>v</span>
-                    <strong id="ota-current-version">
-                        1.0.0
-                    </strong>
+                <div class="ota-summary-grid">
+
+                    <article class="ota-summary-card">
+
+                        <span>
+                            Current version
+                        </span>
+
+                        <strong id="ota-current-version">
+                            —
+                        </strong>
+
+                    </article>
+
+
+                    <article class="ota-summary-card">
+
+                        <span>
+                            Job status
+                        </span>
+
+                        <strong id="ota-job-status">
+                            IDLE
+                        </strong>
+
+                    </article>
+
+
+                    <article class="ota-summary-card">
+
+                        <span>
+                            Target version
+                        </span>
+
+                        <strong id="ota-target-version">
+                            —
+                        </strong>
+
+                    </article>
+
                 </div>
 
-                <div>
 
-                    <h2>
-                        OTA frontend is prepared
-                    </h2>
+                <div class="ota-release-layout">
+
+                    <article class="panel">
+
+                        <div class="ota-panel-heading">
+
+                            <div>
+
+                                <div class="eyebrow">
+                                    RELEASE CATALOG
+                                </div>
+
+                                <h3>
+                                    Available releases
+                                </h3>
+
+                            </div>
+
+                            <span class="status-badge status-neutral">
+                                PRIVATE S3
+                            </span>
+
+                        </div>
+
+
+                        <div
+                            id="ota-release-list"
+                            class="ota-release-list"
+                        >
+
+                            <div class="empty-cell">
+                                Čeka se lista OTA release paketa.
+                            </div>
+
+                        </div>
+
+                    </article>
+
+
+                    <article class="panel">
+
+                        <div class="eyebrow">
+                            SELECTED UPDATE
+                        </div>
+
+                        <div
+                            id="ota-selected-version"
+                            class="ota-selected-version"
+                        >
+                            —
+                        </div>
+
+                        <p
+                            id="ota-selected-meta"
+                            class="ota-selected-meta"
+                        >
+                            Izaberi noviju verziju dostupnu
+                            u privatnom S3 bucketu.
+                        </p>
+
+                        <div
+                            id="ota-selected-features"
+                            class="ota-feature-list"
+                        ></div>
+
+                        <div class="ota-action-row">
+
+                            <button
+                                id="ota-install-button"
+                                class="button button-primary"
+                                type="button"
+                                disabled
+                            >
+                                No newer uploaded release
+                            </button>
+
+                        </div>
+
+                    </article>
+
+                </div>
+
+
+                <article class="panel">
+
+                    <div class="ota-progress-header">
+
+                        <div>
+
+                            <div class="eyebrow">
+                                LIVE OTA PIPELINE
+                            </div>
+
+                            <h3 id="ota-progress-phase">
+                                IDLE
+                            </h3>
+
+                        </div>
+
+                        <strong id="ota-progress-percent">
+                            0%
+                        </strong>
+
+                    </div>
+
+
+                    <div class="ota-progress-track">
+
+                        <div
+                            id="ota-progress-fill"
+                            class="ota-progress-fill"
+                        ></div>
+
+                    </div>
+
+
+                    <div
+                        id="ota-progress-steps"
+                        class="ota-progress-grid"
+                    ></div>
+
+
+                    <div class="ota-job-meta">
+
+                        <div>
+
+                            <span>
+                                AWS IoT Job ID
+                            </span>
+
+                            <strong id="ota-job-id">
+                                —
+                            </strong>
+
+                        </div>
+
+
+                        <div>
+
+                            <span>
+                                Self-test
+                            </span>
+
+                            <strong id="ota-self-test">
+                                NOT_RUN
+                            </strong>
+
+                        </div>
+
+
+                        <div>
+
+                            <span>
+                                Rollback performed
+                            </span>
+
+                            <strong id="ota-rollback">
+                                NO
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        id="ota-status-message"
+                        class="ota-status-message"
+                    >
+                        Čeka se OTA stanje.
+                    </div>
+
+
+                    <div
+                        id="ota-job-log"
+                        class="ota-job-log"
+                        data-empty="true"
+                    >
+                        OTA status poruke će se
+                        prikazivati ovdje.
+                    </div>
+
+                </article>
+
+
+                <article
+                    class="panel ota-warning-panel"
+                >
+
+                    <div class="eyebrow">
+                        DEMONSTRATION SAFETY
+                    </div>
+
+                    <h3>
+                        Transactional update with rollback
+                    </h3>
 
                     <p class="muted">
-                        Trenutno je instalirana verzija
-                        HealthBand 1.0.0. Lokalna OTA
-                        infrastruktura, release paketi,
-                        rollback i AWS IoT Jobs biće
-                        implementirani u narednim modulima.
+                        OTA koristi AWS IoT Jobs,
+                        privatni S3 paket, SHA-256 provjeru,
+                        manifest validaciju, backup,
+                        aktivaciju, self-test i automatski
+                        rollback ako nova verzija ne prođe
+                        provjeru. Uređaj je potpuno simuliran
+                        i nadogradnja predstavlja zamjenu
+                        Python aplikacije, a ne firmware
+                        fizičkog medicinskog uređaja.
                     </p>
 
-                    <button
-                        class="button button-primary"
-                        disabled
-                    >
-                        No release available yet
-                    </button>
+                </article>
 
-                </div>
-
-            </article>
+            </div>
 
         </section>
 
@@ -1907,6 +2498,7 @@
             <div class="section-heading">
 
                 <div>
+
                     <div class="eyebrow">
                         SYSTEM HISTORY
                     </div>
@@ -1914,11 +2506,14 @@
                     <h2>
                         Event Log
                     </h2>
+
                 </div>
+
 
                 <div class="event-controls">
 
                     <select id="event-filter">
+
                         <option value="ALL">
                             All
                         </option>
@@ -1934,7 +2529,9 @@
                         <option value="COMMAND_RESPONSE">
                             Commands
                         </option>
+
                     </select>
+
 
                     <button
                         id="event-refresh"
@@ -1955,9 +2552,11 @@
                     id="event-log"
                     class="event-log"
                 >
+
                     <div class="empty-cell">
                         Čeka se istorija događaja.
                     </div>
+
                 </div>
 
             </article>

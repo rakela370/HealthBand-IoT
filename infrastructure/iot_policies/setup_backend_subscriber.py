@@ -1,119 +1,626 @@
+"""Provision the dedicated HealthBand backend MQTT identity and policy."""
+
+from __future__ import annotations
+
+import json
 import os
-import sys
 import shutil
+import sys
 from pathlib import Path
+from typing import Any
+from urllib.parse import unquote
+
 import boto3
 from botocore.exceptions import ClientError
+from dotenv import load_dotenv
 
-def main():
-    region = os.getenv("AWS_REGION", "eu-central-1")
-    policy_name = "HealthBandBackendSubscriberPolicy"
-    client_id = "healthband-control-backend"
 
-    # Korijenski direktorij projekta
-    script_dir = Path(__file__).resolve().parent
-    repo_root = script_dir.parent.parent
-    os.chdir(repo_root)
+POLICY_NAME = "HealthBandBackendSubscriberPolicy"
+DEFAULT_REGION = "eu-central-1"
+DEFAULT_THING_NAME = "healthband-device-001"
+DEFAULT_CLIENT_ID = "healthband-control-backend"
 
-    # Boto3 sesija i klijenti
+
+def normalized_pem(value: str) -> str:
+    """Normalize PEM text for certificate comparison."""
+
+    return "".join(value.split())
+
+
+def decode_policy_document(
+    value: Any,
+) -> dict[str, Any] | None:
+    """Decode an AWS IoT policy document returned by get_policy."""
+
+    if isinstance(value, dict):
+        return value
+
+    if not isinstance(value, str):
+        return None
+
+    for candidate in (
+        value,
+        unquote(value),
+    ):
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(parsed, dict):
+            return parsed
+
+    return None
+
+
+def upsert_policy(
+    iot: Any,
+    policy_document: dict[str, Any],
+) -> None:
+    """Create or update the backend subscriber policy."""
+
+    document = json.dumps(
+        policy_document,
+        separators=(",", ":"),
+    )
+
     try:
-        session = boto3.Session(region_name=region)
-        sts_client = session.client("sts")
-        iot_client = session.client("iot")
-        account_id = sts_client.get_caller_identity()["Account"]
-    except Exception as e:
-        print(f"Greška pri inicijalizaciji AWS klijenta: {e}")
-        sys.exit(1)
+        existing = iot.get_policy(
+            policyName=POLICY_NAME
+        )
 
-    template_path = repo_root / "infrastructure" / "iot_policies" / "healthband-backend-subscriber-policy.template.json"
-    local_policy_path = repo_root / "infrastructure" / "iot_policies" / "healthband-backend-subscriber-policy.local.json"
+    except iot.exceptions.ResourceNotFoundException:
+        iot.create_policy(
+            policyName=POLICY_NAME,
+            policyDocument=document,
+        )
 
-    if not template_path.exists():
-        print(f"Greška: Template fajl ne postoji: {template_path}")
-        sys.exit(1)
+        print(
+            f"Created IoT policy: {POLICY_NAME}"
+        )
 
-    with open(template_path, "r", encoding="utf-8") as f:
-        template_content = f.read()
+        return
 
-    policy_document = template_content.replace("YOUR_AWS_ACCOUNT_ID", account_id)
+    current = decode_policy_document(
+        existing.get(
+            "policyDocument"
+        )
+    )
 
-    with open(local_policy_path, "w", encoding="utf-8") as f:
-        f.write(policy_document)
+    if current == policy_document:
+        print(
+            f"IoT policy already up to date: {POLICY_NAME}"
+        )
 
-    # 1. Projera i kreiranje IoT Policy-ja
-    try:
-        iot_client.get_policy(policyName=policy_name)
-        print(f"IoT policy already exists: {policy_name}")
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "ResourceNotFoundException":
-            print(f"Creating IoT policy: {policy_name}")
-            iot_client.create_policy(
-                policyName=policy_name,
-                policyDocument=policy_document
+        return
+
+    versions = iot.list_policy_versions(
+        policyName=POLICY_NAME
+    )[
+        "policyVersions"
+    ]
+
+    if len(versions) >= 5:
+        candidates = sorted(
+            (
+                item
+                for item in versions
+                if not item.get(
+                    "isDefaultVersion",
+                    False,
+                )
+            ),
+            key=lambda item: int(
+                item[
+                    "versionId"
+                ]
+            ),
+        )
+
+        if not candidates:
+            raise RuntimeError(
+                "No non-default IoT policy version can be "
+                "deleted before creating a new version."
             )
-        else:
-            print(f"Greška pri provjeri IoT policy-ja: {e}")
-            sys.exit(1)
 
-    # 2. Kreiranje certifikata za backend
-    cert_dir = repo_root / "certificates" / "healthband-control-backend"
-    cert_dir.mkdir(parents=True, exist_ok=True)
+        iot.delete_policy_version(
+            policyName=POLICY_NAME,
+            policyVersionId=(
+                candidates[
+                    0
+                ][
+                    "versionId"
+                ]
+            ),
+        )
 
-    cert_path = cert_dir / "backend.pem.crt"
-    private_key_path = cert_dir / "backend.private.key"
-    public_key_path = cert_dir / "backend.public.key"
-    cert_arn_path = cert_dir / "certificate_arn.txt"
+    response = iot.create_policy_version(
+        policyName=POLICY_NAME,
+        policyDocument=document,
+        setAsDefault=True,
+    )
 
-    if not cert_path.exists() or not private_key_path.exists():
-        print("Creating separate backend X.509 certificate...")
-        res = iot_client.create_keys_and_certificate(setAsActive=True)
+    print(
+        f"Updated IoT policy: {POLICY_NAME} -> "
+        f"version {response['policyVersionId']}"
+    )
 
-        cert_arn = res["certificateArn"]
-        cert_pem = res["certificatePem"]
-        key_pair = res["keyPair"]
 
-        with open(cert_path, "w", encoding="utf-8") as f:
-            f.write(cert_pem)
-        with open(private_key_path, "w", encoding="utf-8") as f:
-            f.write(key_pair["PrivateKey"])
-        with open(public_key_path, "w", encoding="utf-8") as f:
-            f.write(key_pair["PublicKey"])
-        with open(cert_arn_path, "w", encoding="utf-8") as f:
-            f.write(cert_arn)
+def find_certificate_arn_by_pem(
+    iot: Any,
+    certificate_path: Path,
+) -> str:
+    """Return the AWS certificate ARN matching the local PEM."""
+
+    target = normalized_pem(
+        certificate_path.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    paginator = iot.get_paginator(
+        "list_certificates"
+    )
+
+    for page in paginator.paginate(
+        pageSize=100
+    ):
+        for certificate in page.get(
+            "certificates",
+            [],
+        ):
+            description = iot.describe_certificate(
+                certificateId=(
+                    certificate[
+                        "certificateId"
+                    ]
+                )
+            )[
+                "certificateDescription"
+            ]
+
+            pem = description.get(
+                "certificatePem"
+            )
+
+            if (
+                isinstance(
+                    pem,
+                    str,
+                )
+                and normalized_pem(
+                    pem
+                )
+                == target
+            ):
+                return str(
+                    description[
+                        "certificateArn"
+                    ]
+                )
+
+    raise RuntimeError(
+        "Local backend certificate exists, but no matching "
+        "AWS IoT certificate was found."
+    )
+
+
+def render_policy(
+    template_path: Path,
+    *,
+    region: str,
+    account_id: str,
+    thing_name: str,
+    client_id: str,
+) -> dict[str, Any]:
+    """Render and validate the backend subscriber policy template."""
+
+    text = template_path.read_text(
+        encoding="utf-8"
+    )
+
+    replacements = {
+        "YOUR_AWS_REGION":
+            region,
+
+        "YOUR_AWS_ACCOUNT_ID":
+            account_id,
+
+        "YOUR_THING_NAME":
+            thing_name,
+
+        "YOUR_BACKEND_CLIENT_ID":
+            client_id,
+    }
+
+    for (
+        source,
+        target,
+    ) in replacements.items():
+        text = text.replace(
+            source,
+            target,
+        )
+
+    data = json.loads(
+        text
+    )
+
+    if not isinstance(
+        data,
+        dict,
+    ):
+        raise RuntimeError(
+            "Backend IoT policy template must render "
+            "to a JSON object."
+        )
+
+    return data
+
+
+def main() -> None:
+    """Create/align the backend MQTT certificate and subscriber policy."""
+
+    script_dir = (
+        Path(__file__)
+        .resolve()
+        .parent
+    )
+
+    repo_root = (
+        script_dir
+        .parent
+        .parent
+    )
+
+    load_dotenv(
+        repo_root
+        / ".env",
+        override=False,
+    )
+
+    region = (
+        os.getenv(
+            "AWS_REGION",
+            DEFAULT_REGION,
+        ).strip()
+        or DEFAULT_REGION
+    )
+
+    profile = (
+        os.getenv(
+            "AWS_PROFILE",
+            "",
+        ).strip()
+        or None
+    )
+
+    thing_name = (
+        os.getenv(
+            "HEALTHBAND_DEVICE_ID",
+            DEFAULT_THING_NAME,
+        ).strip()
+        or DEFAULT_THING_NAME
+    )
+
+    client_id = (
+        os.getenv(
+            "BACKEND_MQTT_CLIENT_ID",
+            DEFAULT_CLIENT_ID,
+        ).strip()
+        or DEFAULT_CLIENT_ID
+    )
+
+    session_kwargs: dict[
+        str,
+        str,
+    ] = {
+        "region_name":
+            region,
+    }
+
+    if profile:
+        session_kwargs[
+            "profile_name"
+        ] = (
+            profile
+        )
+
+    try:
+        session = boto3.Session(
+            **session_kwargs
+        )
+
+        sts_client = (
+            session.client(
+                "sts"
+            )
+        )
+
+        iot_client = (
+            session.client(
+                "iot"
+            )
+        )
+
+        account_id = str(
+            sts_client
+            .get_caller_identity()[
+                "Account"
+            ]
+        )
+
+    except Exception as exc:
+        print(
+            "Greška pri inicijalizaciji AWS klijenta: "
+            f"{exc}"
+        )
+
+        sys.exit(
+            1
+        )
+
+    template_path = (
+        script_dir
+        / (
+            "healthband-backend-"
+            "subscriber-policy.template.json"
+        )
+    )
+
+    local_policy_path = (
+        script_dir
+        / (
+            "healthband-backend-"
+            "subscriber-policy.local.json"
+        )
+    )
+
+    if not (
+        template_path
+        .is_file()
+    ):
+        print(
+            "Greška: Template fajl ne postoji: "
+            f"{template_path}"
+        )
+
+        sys.exit(
+            1
+        )
+
+    policy_document = render_policy(
+        template_path,
+        region=(
+            region
+        ),
+        account_id=(
+            account_id
+        ),
+        thing_name=(
+            thing_name
+        ),
+        client_id=(
+            client_id
+        ),
+    )
+
+    local_policy_path.write_text(
+        json.dumps(
+            policy_document,
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    try:
+        upsert_policy(
+            iot_client,
+            policy_document,
+        )
+
+    except ClientError as exc:
+        print(
+            "Greška pri kreiranju/ažuriranju "
+            "IoT policy-ja: "
+            f"{exc}"
+        )
+
+        sys.exit(
+            1
+        )
+
+    cert_dir = (
+        repo_root
+        / "certificates"
+        / "healthband-control-backend"
+    )
+
+    cert_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    cert_path = (
+        cert_dir
+        / "backend.pem.crt"
+    )
+
+    private_key_path = (
+        cert_dir
+        / "backend.private.key"
+    )
+
+    public_key_path = (
+        cert_dir
+        / "backend.public.key"
+    )
+
+    cert_arn_path = (
+        cert_dir
+        / "certificate_arn.txt"
+    )
+
+    if (
+        not cert_path.is_file()
+        or not private_key_path.is_file()
+    ):
+        print(
+            "Creating separate backend X.509 certificate..."
+        )
+
+        response = (
+            iot_client
+            .create_keys_and_certificate(
+                setAsActive=True
+            )
+        )
+
+        certificate_arn = str(
+            response[
+                "certificateArn"
+            ]
+        )
+
+        cert_path.write_text(
+            response[
+                "certificatePem"
+            ],
+            encoding="utf-8",
+        )
+
+        private_key_path.write_text(
+            response[
+                "keyPair"
+            ][
+                "PrivateKey"
+            ],
+            encoding="utf-8",
+        )
+
+        public_key_path.write_text(
+            response[
+                "keyPair"
+            ][
+                "PublicKey"
+            ],
+            encoding="utf-8",
+        )
+
+        cert_arn_path.write_text(
+            certificate_arn,
+            encoding="utf-8",
+        )
+
     else:
-        print("Backend certificate already exists.")
+        print(
+            "Backend certificate already exists."
+        )
 
-    # 3. Kopiranje Root CA certifikata
-    device_ca_path = repo_root / "certificates" / "healthband-device-001" / "AmazonRootCA1.pem"
-    backend_ca_path = cert_dir / "AmazonRootCA1.pem"
+        try:
+            certificate_arn = (
+                find_certificate_arn_by_pem(
+                    iot_client,
+                    cert_path,
+                )
+            )
 
-    if not backend_ca_path.exists():
-        if not device_ca_path.exists():
-            print("Greška: AmazonRootCA1.pem nije pronađen u certifikatima uređaja.")
-            sys.exit(1)
-        shutil.copy(device_ca_path, backend_ca_path)
+        except RuntimeError as exc:
+            print(
+                f"Greška: {exc}"
+            )
 
-    # 4. Povezivanje policy-ja i certifikata
-    if not cert_arn_path.exists():
-        print("Greška: certificate_arn.txt nedostaje.")
-        sys.exit(1)
+            sys.exit(
+                1
+            )
 
-    with open(cert_arn_path, "r", encoding="utf-8") as f:
-        certificate_arn = f.read().strip()
+        cert_arn_path.write_text(
+            certificate_arn,
+            encoding="utf-8",
+        )
 
-    print("Attaching backend IoT policy...")
+    device_ca_path = (
+        repo_root
+        / "certificates"
+        / thing_name
+        / "AmazonRootCA1.pem"
+    )
+
+    backend_ca_path = (
+        cert_dir
+        / "AmazonRootCA1.pem"
+    )
+
+    if not (
+        backend_ca_path
+        .is_file()
+    ):
+        if not (
+            device_ca_path
+            .is_file()
+        ):
+            print(
+                "Greška: AmazonRootCA1.pem nije pronađen "
+                "u certifikatima uređaja."
+            )
+
+            sys.exit(
+                1
+            )
+
+        shutil.copy(
+            device_ca_path,
+            backend_ca_path,
+        )
+
     try:
         iot_client.attach_policy(
-            policyName=policy_name,
-            target=certificate_arn
+            policyName=(
+                POLICY_NAME
+            ),
+            target=(
+                certificate_arn
+            ),
         )
-    except ClientError as e:
-        print(f"Greška pri spajanju policy-ja: {e}")
-        sys.exit(1)
 
-    print("\nBackend MQTT identity is ready.")
-    print(f"Client ID: {client_id}")
-    print(f"Policy: {policy_name}")
+    except ClientError as exc:
+        print(
+            "Greška pri spajanju policy-ja i certifikata: "
+            f"{exc}"
+        )
+
+        sys.exit(
+            1
+        )
+
+    print()
+
+    print(
+        "Backend MQTT identity is ready."
+    )
+
+    print(
+        f"Client ID: {client_id}"
+    )
+
+    print(
+        f"Thing: {thing_name}"
+    )
+
+    print(
+        f"Policy: {POLICY_NAME}"
+    )
+
+    print(
+        f"Certificate ARN: {certificate_arn}"
+    )
+
+    print(
+        f"Rendered policy: {local_policy_path}"
+    )
+
 
 if __name__ == "__main__":
     main()

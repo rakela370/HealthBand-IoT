@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import (
+    AliasChoices,
+    Field,
+)
 from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
@@ -109,12 +112,58 @@ class BackendSettings(BaseSettings):
         alias="DYNAMODB_EVENTS_TABLE",
     )
 
+    ota_s3_bucket: str = Field(
+        default="",
+        alias="OTA_S3_BUCKET",
+    )
+
+    ota_s3_prefix: str = Field(
+        default="releases",
+        alias="OTA_S3_PREFIX",
+    )
+
+    ota_jobs_role_arn: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "OTA_IOT_JOBS_ROLE_ARN",
+            "OTA_JOBS_ROLE_ARN",
+        ),
+    )
+
+    ota_artifacts_root: str = Field(
+        default="ota_artifacts",
+        alias="OTA_ARTIFACTS_ROOT",
+    )
+
+    ota_resource_state_path: str = Field(
+        default=(
+            "runtime/"
+            "ota_aws_resources.json"
+        ),
+        alias="OTA_RESOURCE_STATE_PATH",
+    )
+
+    ota_presigned_url_expiry_sec: int = Field(
+        default=900,
+        ge=60,
+        le=3600,
+        validation_alias=AliasChoices(
+            "OTA_PRESIGNED_URL_EXPIRES_SEC",
+            "OTA_PRESIGNED_URL_EXPIRY_SEC",
+        ),
+    )
+
+    ota_update_timeout_sec: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        alias="OTA_UPDATE_TIMEOUT_SEC",
+    )
+
     cors_origins: str = Field(
         default=(
             "http://127.0.0.1:8000,"
-            "http://localhost:8000,"
-            "http://127.0.0.1:5500,"
-            "http://localhost:5500"
+            "http://localhost:8000"
         ),
         alias="BACKEND_CORS_ORIGINS",
     )
@@ -123,18 +172,34 @@ class BackendSettings(BaseSettings):
     def profile_name(
         self,
     ) -> str | None:
-        """Return normalized optional boto3 profile name."""
+        """Return normalized optional boto3 profile."""
 
-        if self.aws_profile is None:
+        if (
+            self.aws_profile
+            is None
+        ):
             return None
 
         value = (
-            self.aws_profile.strip()
+            self.aws_profile
+            .strip()
         )
 
         return (
             value
             or None
+        )
+
+    @property
+    def normalized_ota_s3_prefix(
+        self,
+    ) -> str:
+        """Return OTA S3 prefix without leading or trailing slashes."""
+
+        return (
+            self.ota_s3_prefix
+            .strip()
+            .strip("/")
         )
 
     @property
@@ -145,7 +210,11 @@ class BackendSettings(BaseSettings):
 
         return [
             origin.strip()
-            for origin in self.cors_origins.split(",")
+            for origin
+            in self.cors_origins
+            .split(
+                ","
+            )
             if origin.strip()
         ]
 
@@ -153,11 +222,13 @@ class BackendSettings(BaseSettings):
         self,
         value: str,
     ) -> Path:
-        """Resolve one project-relative filesystem path."""
+        """Resolve project-relative path."""
 
-        path = Path(
-            value
-        ).expanduser()
+        path = (
+            Path(
+                value
+            ).expanduser()
+        )
 
         if not path.is_absolute():
             path = (

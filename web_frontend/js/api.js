@@ -245,6 +245,44 @@ export class ApiClient {
     }
 
 
+    getReleases() {
+
+        return this.request(
+            "/api/releases"
+        );
+    }
+
+
+    getOtaState() {
+
+        return this.request(
+            `/api/devices/${this.deviceId}/ota`
+        );
+    }
+
+
+    startOta(
+        targetVersion,
+        force = false
+    ) {
+
+        return this.request(
+            `/api/devices/${this.deviceId}/ota`,
+            {
+                method: "POST",
+
+                body:
+                    JSON.stringify(
+                        {
+                            targetVersion,
+                            force
+                        }
+                    )
+            }
+        );
+    }
+
+
     websocketUrl() {
 
         const wsBase =

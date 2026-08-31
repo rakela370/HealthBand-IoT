@@ -5,20 +5,21 @@
       "Sid": "BackendConnect",
       "Effect": "Allow",
       "Action": "iot:Connect",
-      "Resource": "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:client/healthband-control-backend"
+      "Resource": "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:client/YOUR_BACKEND_CLIENT_ID"
     },
     {
       "Sid": "BackendSubscribe",
       "Effect": "Allow",
       "Action": "iot:Subscribe",
       "Resource": [
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/telemetry",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/analytics",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/alerts",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/health",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/events",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/commands/response",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/healthband-device-001/presence"
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/YOUR_THING_NAME/telemetry",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/YOUR_THING_NAME/analytics",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/YOUR_THING_NAME/alerts",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/YOUR_THING_NAME/health",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/YOUR_THING_NAME/events",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/YOUR_THING_NAME/commands/response",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/YOUR_THING_NAME/presence",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topicfilter/healthband/YOUR_THING_NAME/ota/status"
       ]
     },
     {
@@ -26,13 +27,14 @@
       "Effect": "Allow",
       "Action": "iot:Receive",
       "Resource": [
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/telemetry",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/analytics",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/alerts",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/health",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/events",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/commands/response",
-        "arn:aws:iot:eu-central-1:YOUR_AWS_ACCOUNT_ID:topic/healthband/healthband-device-001/presence"
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topic/healthband/YOUR_THING_NAME/telemetry",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topic/healthband/YOUR_THING_NAME/analytics",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topic/healthband/YOUR_THING_NAME/alerts",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topic/healthband/YOUR_THING_NAME/health",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topic/healthband/YOUR_THING_NAME/events",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topic/healthband/YOUR_THING_NAME/commands/response",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topic/healthband/YOUR_THING_NAME/presence",
+        "arn:aws:iot:YOUR_AWS_REGION:YOUR_AWS_ACCOUNT_ID:topic/healthband/YOUR_THING_NAME/ota/status"
       ]
     }
   ]
