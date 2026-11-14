@@ -129,6 +129,10 @@ class DeviceController:
     CONNECTION_WATCH_INTERVAL_SEC = 1.0
 
     RECONNECT_RETRY_INTERVAL_SEC = 5.0
+    RUNTIME_STATE_KEY = "healthband-runtime-state-v2"
+    LOCAL_NETWORK_RESTORE_KEY = (
+        "healthband-local-control-restore-network-v1"
+    )
 
     def __init__(
         self,
@@ -316,6 +320,11 @@ class DeviceController:
                 offline_queue
             )
 
+        # Restore process-local sensor/activity state only after the shared
+        # SQLite database is available. The same database survives normal
+        # restart, OTA activation and rollback.
+        self._restore_runtime_state()
+
         self.calorie_estimator: (
             CalorieEstimator | None
         ) = None
@@ -433,6 +442,10 @@ class DeviceController:
         self._mqtt_send_failures = (
             0
         )
+
+        self._pending_local_network_restore: (
+            dict[str, Any] | None
+        ) = None
 
     @property
     def current_state(
@@ -668,26 +681,106 @@ class DeviceController:
         scenario: SimulationScenario,
         failed_sensor_name: str | None = None,
     ) -> None:
-        """Change simulation scenario."""
+        """Change physical activity or apply a technical overlay."""
 
-        previous = (
-            self.current_scenario
-        )
+        previous = self.current_scenario
 
         self.scenario_engine.set_scenario(
-            scenario=(
-                scenario
-            ),
-            failed_sensor_name=(
-                failed_sensor_name
-            ),
+            scenario=scenario,
+            failed_sensor_name=failed_sensor_name,
         )
 
-        logger.info(
-            "Simulation scenario changed: %s -> %s.",
-            previous.value,
-            scenario.value,
-        )
+        current = self.current_scenario
+
+        if hasattr(self, "offline_queue"):
+            self._persist_runtime_state()
+
+        if scenario in {
+            SimulationScenario.NETWORK_OUTAGE,
+            SimulationScenario.SENSOR_FAILURE,
+            SimulationScenario.LOW_BATTERY,
+        }:
+            logger.info(
+                "Technical simulation overlay applied: %s | physiologicalScenario=%s.",
+                scenario.value,
+                current.value,
+            )
+        else:
+            logger.info(
+                "Simulation scenario changed: %s -> %s.",
+                previous.value,
+                current.value,
+            )
+
+    def _restore_runtime_state(self) -> None:
+        """Restore sensor values and physiological scenario from SQLite."""
+
+        try:
+            raw = self.offline_queue.database.get_state(
+                self.RUNTIME_STATE_KEY
+            )
+            if raw is None:
+                return
+
+            state = json.loads(raw)
+            if not isinstance(state, dict):
+                return
+
+            scenario_value = state.get("physiologicalScenario")
+            if isinstance(scenario_value, str):
+                try:
+                    scenario = SimulationScenario(scenario_value)
+                except ValueError:
+                    scenario = SimulationScenario.RESTING
+
+                if scenario not in {
+                    SimulationScenario.NETWORK_OUTAGE,
+                    SimulationScenario.SENSOR_FAILURE,
+                    SimulationScenario.LOW_BATTERY,
+                }:
+                    self.scenario_engine.set_scenario(scenario)
+
+            sensor_state = state.get("sensors")
+            if isinstance(sensor_state, dict):
+                self.sensor_manager.restore_runtime_state(sensor_state)
+
+            logger.info(
+                "Runtime state restored | scenario=%s | sensors=%s",
+                self.current_scenario.value,
+                self.sensor_manager.export_runtime_state(),
+            )
+
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            logger.warning("Ignoring invalid persisted runtime state: %s", exc)
+        except Exception:
+            logger.exception("Failed to restore persisted runtime state.")
+
+    def _persist_runtime_state(self) -> None:
+        """Persist values that a real wearable would retain across reboot/OTA."""
+
+        if not hasattr(self, "offline_queue"):
+            return
+
+        try:
+            state: dict[str, Any] = {
+                "physiologicalScenario": self.current_scenario.value,
+                "deviceState": self.current_state.value,
+                "sensors": self.sensor_manager.export_runtime_state(),
+                "softwareVersion": self.software_version,
+                "updatedAt": datetime.now(timezone.utc).isoformat(),
+            }
+
+            if self.latest_snapshot is not None:
+                state["latestTelemetry"] = self._build_telemetry_payload(
+                    self.latest_snapshot
+                )
+
+            self.offline_queue.database.set_state(
+                self.RUNTIME_STATE_KEY,
+                json.dumps(state, separators=(",", ":")),
+            )
+        except Exception:
+            logger.exception("Failed to persist HealthBand runtime state.")
 
     async def read_sensors_now(
         self,
@@ -1052,6 +1145,8 @@ class DeviceController:
             snapshot
         )
 
+        self._persist_runtime_state()
+
         logger.info(
             "Sensor snapshot | "
             "scenario=%s | "
@@ -1214,8 +1309,11 @@ class DeviceController:
             snapshot.measurements
         )
 
+        # Keep the canonical Celsius value in the cloud payload for
+        # history/analytics while also exposing the user's selected display
+        # unit through skinTemperature + temperatureUnit.
         temperature_celsius = (
-            measurements.pop(
+            measurements.get(
                 "skinTemperatureCelsius",
                 None,
             )
@@ -1294,6 +1392,7 @@ class DeviceController:
         if alert.type in {
             AlertType.HEART_RATE_BELOW_THRESHOLD,
             AlertType.HEART_RATE_ABOVE_RESTING_THRESHOLD,
+            AlertType.OVEREXERTION_HEART_RATE,
         }:
             return (
                 config
@@ -2051,6 +2150,7 @@ class DeviceController:
             )
 
         battery.start_charging()
+        self._persist_runtime_state()
 
         return (
             "Charging started.",
@@ -2084,6 +2184,7 @@ class DeviceController:
             )
 
         battery.stop_charging()
+        self._persist_runtime_state()
 
         return (
             "Charging stopped.",
@@ -2242,6 +2343,8 @@ class DeviceController:
                 sensor_name
             ),
         )
+        self.sensor_manager.simulate_sensor_failure(sensor_name)
+        self._persist_runtime_state()
 
         return (
             "Sensor failure simulated "
@@ -2269,17 +2372,15 @@ class DeviceController:
             ]
         )
 
+        # Clear both layers of the simulated fault. Otherwise the
+        # ScenarioEngine would re-apply the failure on the next sensor read.
+        self.scenario_engine.clear_sensor_failure(
+            sensor_name
+        )
         self.sensor_manager.restore_sensor(
             sensor_name
         )
-
-        if (
-            self.current_scenario
-            == SimulationScenario.SENSOR_FAILURE
-        ):
-            self.change_scenario(
-                SimulationScenario.RESTING
-            )
+        self._persist_runtime_state()
 
         return (
             f"Sensor '{sensor_name}' restored.",
@@ -2370,6 +2471,151 @@ class DeviceController:
             },
         )
 
+    def _read_local_network_restore_request(
+        self,
+    ) -> dict[str, Any] | None:
+        """Read an out-of-band RESTORE_NETWORK request from local SQLite.
+
+        The simulator deliberately disconnects its MQTT transport during a
+        network-outage demo, so an MQTT-delivered restore command cannot reach
+        it. The same-host control backend therefore places only this one
+        transport-recovery command in the shared local database.
+        """
+
+        if not hasattr(self, "offline_queue"):
+            return None
+
+        try:
+            raw = self.offline_queue.database.get_state(
+                self.LOCAL_NETWORK_RESTORE_KEY
+            )
+            if raw is None:
+                return None
+
+            request = json.loads(raw)
+            if not isinstance(request, dict):
+                return None
+
+            if request.get("status") != "REQUESTED":
+                return None
+
+            if request.get("type") != CommandType.RESTORE_NETWORK.value:
+                return None
+
+            command_id = request.get("commandId")
+            if not isinstance(command_id, str) or not command_id.strip():
+                return None
+
+            if request.get("deviceId") not in {None, self.device_id}:
+                return None
+
+            return request
+
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.warning(
+                "Ignoring invalid local network-restore request: %s",
+                exc,
+            )
+            return None
+
+        except Exception:
+            logger.exception(
+                "Unable to read local network-restore request."
+            )
+            return None
+
+    async def _process_local_network_restore_request(
+        self,
+    ) -> bool:
+        """Make a local RESTORE_NETWORK request effective immediately."""
+
+        request = self._read_local_network_restore_request()
+        if request is None:
+            return False
+
+        command_id = str(request["commandId"])
+
+        if (
+            self._pending_local_network_restore is None
+            or self._pending_local_network_restore.get("commandId")
+            != command_id
+        ):
+            self._pending_local_network_restore = request
+            logger.info(
+                "Local RESTORE_NETWORK request received | commandId=%s",
+                command_id,
+            )
+
+        if self.mqtt_client is None:
+            return False
+
+        if (
+            self.mqtt_client.is_connected
+            and self.current_state != DeviceState.OFFLINE
+            and not self._manual_reconnect_needed
+        ):
+            await self._complete_pending_local_network_restore(
+                message="Network connection is already available."
+            )
+            return True
+
+        # Cancel the remaining simulated timeout and let the normal reconnect
+        # path execute on this same connection-watch tick.
+        self._simulated_outage_until = None
+        self._next_manual_reconnect_at = 0.0
+        self._manual_reconnect_needed = True
+        return True
+
+    async def _complete_pending_local_network_restore(
+        self,
+        *,
+        message: str = "Network restored successfully.",
+    ) -> None:
+        """Acknowledge local restore only after MQTT is actually available."""
+
+        request = self._pending_local_network_restore
+        if request is None:
+            return
+
+        command_id = str(request["commandId"])
+        completed_at = datetime.now(timezone.utc)
+
+        state = dict(request)
+        state.update(
+            {
+                "status": CommandStatus.SUCCEEDED.value,
+                "message": message,
+                "completedAt": completed_at.isoformat(),
+            }
+        )
+
+        try:
+            self.offline_queue.database.set_state(
+                self.LOCAL_NETWORK_RESTORE_KEY,
+                json.dumps(state, separators=(",", ":")),
+            )
+        except Exception:
+            logger.exception(
+                "Unable to persist local RESTORE_NETWORK completion."
+            )
+
+        self._pending_local_network_restore = None
+
+        await self._publish_command_result(
+            CommandResult(
+                command_id=command_id,
+                device_id=self.device_id,
+                command_type=CommandType.RESTORE_NETWORK.value,
+                status=CommandStatus.SUCCEEDED,
+                message=message,
+                details={
+                    "automaticReconnect": False,
+                    "transport": "LOCAL_SIMULATION_CONTROL",
+                },
+                timestamp=completed_at,
+            )
+        )
+
     async def _begin_simulated_network_outage(
         self,
         duration_sec: float,
@@ -2432,6 +2678,10 @@ class DeviceController:
 
         if self.mqtt_client is None:
             return
+
+        # RESTORE_NETWORK is intentionally out-of-band: the device cannot
+        # receive an MQTT command while the simulated MQTT link is down.
+        await self._process_local_network_restore_request()
 
         now = (
             monotonic()
@@ -2585,6 +2835,8 @@ class DeviceController:
                     "AWS IoT reconnect completed."
                 )
             )
+
+            await self._complete_pending_local_network_restore()
 
         except Exception as exc:
             logger.warning(
@@ -3329,6 +3581,11 @@ class DeviceController:
             transition.current_state.value,
             transition.reason,
         )
+
+        # Keep local connectivity state current even between sensor readings.
+        # This prevents the local WebSocket bridge from replaying a stale
+        # OFFLINE sample immediately after MQTT reconnects.
+        self._persist_runtime_state()
 
         payload = {
             "deviceId": (

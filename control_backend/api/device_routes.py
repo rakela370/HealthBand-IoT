@@ -1,12 +1,17 @@
 """REST routes for HealthBand device state."""
 
 import asyncio
+import json
 from typing import Any
 
 from fastapi import (
     APIRouter,
     HTTPException,
     Request,
+)
+
+from device_simulator.storage.local_database import (
+    LocalDatabase,
 )
 
 
@@ -234,6 +239,61 @@ async def get_device_state(
                 "mqttConnected"
             ]
         ),
+    }
+
+
+@router.get(
+    "/{device_id}/local-telemetry"
+)
+async def get_local_telemetry(
+    device_id: str,
+    request: Request,
+) -> dict[str, Any]:
+    """Return the latest device-generated reading from local SQLite.
+
+    This endpoint deliberately bypasses AWS/DynamoDB. It represents the
+    physical HealthBand itself, so the watch UI keeps moving during an
+    internet outage while cloud connectivity is shown separately.
+    """
+
+    ensure_device(request, device_id)
+
+    database = LocalDatabase(
+        request.app.state.settings.resolve_path(
+            "runtime/healthband.db"
+        )
+    )
+
+    raw = await asyncio.to_thread(
+        database.get_state,
+        "healthband-runtime-state-v2",
+    )
+
+    if raw is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No local HealthBand telemetry is available yet.",
+        )
+
+    try:
+        state = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Local HealthBand runtime state is invalid.",
+        ) from exc
+
+    telemetry = state.get("latestTelemetry")
+    if not isinstance(telemetry, dict):
+        raise HTTPException(
+            status_code=404,
+            detail="No local HealthBand telemetry is available yet.",
+        )
+
+    return {
+        "source": "LOCAL_DEVICE",
+        "telemetry": telemetry,
+        "runtimeUpdatedAt": state.get("updatedAt"),
     }
 
 

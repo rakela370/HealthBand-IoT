@@ -125,6 +125,15 @@ export class SimulationView {
                             BPM
                         </div>
 
+                        <div
+                            id="watch-danger-banner"
+                            class="watch-danger-banner hidden"
+                            role="status"
+                            aria-live="polite"
+                        >
+                            ⚠ HIGH HEART RATE
+                        </div>
+
 
                         <div
                             id="watch-v1-bottom-grid"
@@ -580,6 +589,27 @@ export class SimulationView {
         );
 
 
+        const dangerousOverexertion = (
+            telemetry.scenario === "OVEREXERTION"
+            && Number.isFinite(bpm)
+            && bpm >= 180
+        );
+
+        byId(
+            "watch-screen"
+        )?.classList.toggle(
+            "is-danger",
+            dangerousOverexertion
+        );
+
+        byId(
+            "watch-danger-banner"
+        )?.classList.toggle(
+            "hidden",
+            !dangerousOverexertion
+        );
+
+
         const spo2 =
             measurements
             .oxygenSaturationPercentage;
@@ -931,6 +961,14 @@ export class SimulationView {
                 name: "Stress Event",
                 description:
                     "Technical simulation used to test alerts and analytics."
+            },
+
+
+            OVEREXERTION: {
+                symbol: "⚠",
+                name: "Overexertion",
+                description:
+                    "Excessive sprint-effort simulation that can trigger a high heart-rate alert."
             },
 
 

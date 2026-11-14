@@ -1189,7 +1189,7 @@
                     </button>
 
                     <button
-                        class="period-button active"
+                        class="period-button"
                         data-period="1h"
                     >
                         1h
@@ -1203,7 +1203,7 @@
                     </button>
 
                     <button
-                        class="period-button"
+                        class="period-button active"
                         data-period="7d"
                     >
                         7d
@@ -1807,69 +1807,85 @@
                             required
                         >
 
-                            <option value="REQUEST_DEVICE_HEALTH">
-                                REQUEST_DEVICE_HEALTH
-                            </option>
+                            <optgroup label="Monitoring & Device">
 
-                            <option value="REQUEST_IMMEDIATE_MEASUREMENT">
-                                REQUEST_IMMEDIATE_MEASUREMENT
-                            </option>
+                                <option value="REQUEST_DEVICE_HEALTH">
+                                    REQUEST_DEVICE_HEALTH
+                                </option>
 
-                            <option value="CHANGE_SIMULATION_SCENARIO">
-                                CHANGE_SIMULATION_SCENARIO
-                            </option>
+                                <option value="REQUEST_IMMEDIATE_MEASUREMENT">
+                                    REQUEST_IMMEDIATE_MEASUREMENT
+                                </option>
 
-                            <option value="START_MONITORING">
-                                START_MONITORING
-                            </option>
+                                <option value="START_MONITORING">
+                                    START_MONITORING
+                                </option>
 
-                            <option value="STOP_MONITORING">
-                                STOP_MONITORING
-                            </option>
+                                <option value="STOP_MONITORING">
+                                    STOP_MONITORING
+                                </option>
 
-                            <option value="RESTART_DEVICE">
-                                RESTART_DEVICE
-                            </option>
+                                <option value="RESTART_DEVICE">
+                                    RESTART_DEVICE
+                                </option>
 
-                            <option value="ENTER_MAINTENANCE">
-                                ENTER_MAINTENANCE
-                            </option>
+                                <option value="ENTER_MAINTENANCE">
+                                    ENTER_MAINTENANCE
+                                </option>
 
-                            <option value="EXIT_MAINTENANCE">
-                                EXIT_MAINTENANCE
-                            </option>
+                                <option value="EXIT_MAINTENANCE">
+                                    EXIT_MAINTENANCE
+                                </option>
 
-                            <option value="START_CHARGING">
-                                START_CHARGING
-                            </option>
+                                <option value="CLEAR_ALERTS">
+                                    CLEAR_ALERTS
+                                </option>
 
-                            <option value="STOP_CHARGING">
-                                STOP_CHARGING
-                            </option>
+                            </optgroup>
 
-                            <option value="CALIBRATE_SENSOR">
-                                CALIBRATE_SENSOR
-                            </option>
+                            <optgroup label="Simulation & Activity">
 
-                            <option value="CLEAR_ALERTS">
-                                CLEAR_ALERTS
-                            </option>
+                                <option value="CHANGE_SIMULATION_SCENARIO">
+                                    CHANGE_SIMULATION_SCENARIO
+                                </option>
 
-                            <option value="SIMULATE_SENSOR_FAILURE">
-                                SIMULATE_SENSOR_FAILURE
-                            </option>
+                            </optgroup>
 
-                            <option value="RESTORE_SENSOR">
-                                RESTORE_SENSOR
-                            </option>
+                            <optgroup label="Sensors">
 
-                            <option value="SIMULATE_NETWORK_OUTAGE">
-                                SIMULATE_NETWORK_OUTAGE
-                            </option>
+                                <option value="CALIBRATE_SENSOR">
+                                    CALIBRATE_SENSOR
+                                </option>
 
-                            <option value="RESTORE_NETWORK">
-                                RESTORE_NETWORK
-                            </option>
+                                <option value="SIMULATE_SENSOR_FAILURE">
+                                    SIMULATE_SENSOR_FAILURE
+                                </option>
+
+                                <option value="RESTORE_SENSOR">
+                                    RESTORE_SENSOR
+                                </option>
+
+                            </optgroup>
+
+                            <optgroup label="Power & Connectivity">
+
+                                <option value="START_CHARGING">
+                                    START_CHARGING
+                                </option>
+
+                                <option value="STOP_CHARGING">
+                                    STOP_CHARGING
+                                </option>
+
+                                <option value="SIMULATE_NETWORK_OUTAGE">
+                                    SIMULATE_NETWORK_OUTAGE
+                                </option>
+
+                                <option value="RESTORE_NETWORK">
+                                    RESTORE_NETWORK
+                                </option>
+
+                            </optgroup>
 
                         </select>
 
@@ -1912,6 +1928,10 @@
 
                                 <option value="STRESS_EVENT">
                                     STRESS_EVENT
+                                </option>
+
+                                <option value="OVEREXERTION">
+                                    OVEREXERTION
                                 </option>
 
                                 <option value="LOW_BATTERY">

@@ -174,3 +174,43 @@ def test_low_battery_requires_three_measurements() -> None:
         == AlertType.LOW_BATTERY
         for alert in alerts
     )
+
+def test_overexertion_high_hr_generates_immediate_high_priority_alert() -> None:
+    manager = AlertManager(device_id="test-device")
+
+    alerts = manager.evaluate_snapshot(
+        make_snapshot(
+            heart_rate=182,
+            activity="HIGH",
+            scenario="OVEREXERTION",
+            offset_sec=0,
+        )
+    )
+
+    assert any(
+        alert.type == AlertType.OVEREXERTION_HEART_RATE
+        and alert.severity.value == "HIGH"
+        and alert.configured_threshold == 180.0
+        for alert in alerts
+    )
+
+
+def test_same_high_hr_does_not_create_overexertion_alert_in_normal_running() -> None:
+    manager = AlertManager(device_id="test-device")
+    alerts = []
+
+    for index in range(3):
+        alerts.extend(
+            manager.evaluate_snapshot(
+                make_snapshot(
+                    heart_rate=190,
+                    activity="HIGH",
+                    scenario="RUNNING",
+                    offset_sec=index * 2,
+                )
+            )
+        )
+
+    assert AlertType.OVEREXERTION_HEART_RATE not in [
+        alert.type for alert in alerts
+    ]

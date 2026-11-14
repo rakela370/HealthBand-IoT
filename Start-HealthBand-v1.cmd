@@ -42,6 +42,14 @@ echo Stopping previously recorded HealthBand processes...
     --stop >nul 2>&1
 
 echo.
+echo Clearing persistent HealthBand runtime state for a fresh demo...
+
+del /f /q "runtime\healthband.db" 2>nul
+del /f /q "runtime\healthband.db-wal" 2>nul
+del /f /q "runtime\healthband.db-shm" 2>nul
+del /f /q "runtime\device_config.json" 2>nul
+
+echo.
 echo Starting clean HealthBand 1.0.0 demo...
 echo.
 

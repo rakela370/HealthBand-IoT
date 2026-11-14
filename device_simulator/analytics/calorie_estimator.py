@@ -22,24 +22,22 @@ class CalorieEstimator:
     STATE_PREFIX = "calorie-estimator"
 
     _MET_BY_ACTIVITY = {
-        "SLEEPING": 0.95,
-        "RESTING": 1.30,
-        "LIGHT": 2.50,
-        "MODERATE": 4.00,
-        "HIGH": 6.50,
+        "SLEEPING": 1.00,
+        "RESTING": 1.00,
+        "LIGHT": 2.00,
+        "MODERATE": 3.80,
+        "HIGH": 7.30,
     }
 
     _SCENARIO_MET_OVERRIDE = {
-        "SLEEPING": 0.95,
-        "RESTING": 1.30,
-        "WALKING": 3.50,
-        "RUNNING": 8.30,
-        "EXERCISING": 6.00,
+        "SLEEPING": 1.00,
+        "RESTING": 1.00,
+        "WALKING": 3.80,
+        "RUNNING": 8.50,
+        "EXERCISING": 7.30,
         "RECOVERY": 2.00,
         "STRESS_EVENT": 1.50,
-        "LOW_BATTERY": 1.30,
-        "NETWORK_OUTAGE": 1.30,
-        "SENSOR_FAILURE": 1.30,
+        "OVEREXERTION": 12.00,
     }
 
     def __init__(
@@ -120,35 +118,6 @@ class CalorieEstimator:
             )
         )
 
-        resting_hr = max(
-            1.0,
-            float(
-                self.user_profile
-                .resting_heart_rate_bpm
-            ),
-        )
-
-        heart_rate = measurements.get(
-            "heartRateBpm"
-        )
-
-        heart_factor = 1.0
-
-        if heart_rate is not None:
-            ratio = (
-                float(heart_rate)
-                / resting_hr
-            )
-
-            heart_factor = min(
-                1.25,
-                max(
-                    0.90,
-                    0.85
-                    + 0.15 * ratio,
-                ),
-            )
-
         kcal_per_minute = (
             met
             * 3.5
@@ -164,7 +133,6 @@ class CalorieEstimator:
                 elapsed_sec
                 / 60.0
             )
-            * heart_factor
         )
 
         interval_kcal = max(

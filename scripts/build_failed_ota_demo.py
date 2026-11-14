@@ -178,6 +178,10 @@ def main() -> None:
         ] = True
 
         manifest[
+            "hidden"
+        ] = True
+
+        manifest[
             "demoPurpose"
         ] = (
             "Intentional release self-test failure "

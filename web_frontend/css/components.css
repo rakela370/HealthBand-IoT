@@ -393,7 +393,7 @@
 .chart-card {
     position: relative;
 
-    min-height: 330px;
+    min-height: 370px;
 
     padding: 18px;
 
@@ -411,7 +411,7 @@
 }
 
 .chart-card canvas {
-    max-height: 260px;
+    max-height: 300px;
 }
 
 label {

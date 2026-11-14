@@ -1,4 +1,6 @@
-﻿# Python virtual environments
+﻿# =========================
+# Python virtual environments
+# =========================
 .venv/
 venv/
 
@@ -7,52 +9,80 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# =========================
 # Testing / coverage
+# =========================
 .pytest_cache/
 .coverage
 htmlcov/
 
+# =========================
 # Environment variables
+# =========================
 .env
 .env.*
 !.env.example
 
+# =========================
 # AWS certificates and secrets
+# =========================
 certificates/
 *.key
+*.pem
+*.crt
+*.cer
 *.p12
 *.pfx
 
+# =========================
 # Local databases
+# =========================
 *.db
 *.sqlite
 *.sqlite3
 
+# =========================
 # Logs
+# =========================
 logs/
 *.log
 
-# Runtime state and temporary files
+# =========================
+# Runtime state / temporary files
+# =========================
 runtime/
 tmp/
 temp/
 .ota_staging/
 ota_downloads/
 
+# =========================
 # Generated release installation state
+# =========================
 releases/
 
 # Generated bootstrap staging directories
 ota_artifacts/**/.bootstrap_staging/
 
-# Generated local AWS policy / rule files
+# =========================
+# Generated local AWS configuration
+# =========================
 infrastructure/iot_policies/*.local.json
 infrastructure/iot_rules/*.local.json
 
 # One-off local AWS CLI helper files
 s3-encryption.json
 
+# =========================
+# Local diagnostics / backups
+# =========================
+HealthBand_FINAL_PATCH/
+HealthBand_OTA_DIAGNOSTICS/
+HealthBand_OTA_DIAGNOSTICS.zip
+
+# =========================
 # IDE / OS
+# =========================
 .idea/
 .vscode/
 .DS_Store

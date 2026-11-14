@@ -14,7 +14,7 @@ export class HistoryCharts {
             api;
 
         this.period =
-            "1h";
+            "7d";
 
         this.charts = {};
     }
@@ -36,29 +36,15 @@ export class HistoryCharts {
             "Učitavanje podataka iz DynamoDB...";
 
 
-        const longPeriod =
-            [
-                "7d",
-                "30d"
-            ].includes(
-                period
-            );
-
-
         const [
             dataResponse,
             alertsResponse
         ] = await Promise.all(
             [
-                longPeriod
-                    ? this.api
-                        .getAnalytics(
-                            period
-                        )
-                    : this.api
-                        .getTelemetry(
-                            period
-                        ),
+                this.api
+                    .getHistorySeries(
+                        period
+                    ),
 
                 this.api
                     .getAlerts(
@@ -77,21 +63,52 @@ export class HistoryCharts {
             ?? [];
 
 
-        if (
-            longPeriod
-        ) {
-            this._renderAnalytics(
-                items,
-                alerts
-            );
-        }
+        const telemetryItems =
+            items.map(
+                item => ({
+                    timestamp:
+                        item.timestamp,
 
-        else {
-            this._renderTelemetry(
-                items,
-                alerts
+                    measurements: {
+                        heartRateBpm:
+                            item.heartRateBpm
+                            ?? null,
+
+                        skinTemperature:
+                            item.skinTemperatureCelsius
+                            ?? null,
+
+                        skinTemperatureCelsius:
+                            item.skinTemperatureCelsius
+                            ?? null,
+
+                        temperatureUnit:
+                            "CELSIUS",
+
+                        totalDailySteps:
+                            item.totalDailySteps
+                            ?? null,
+
+                        batteryPercentage:
+                            item.batteryPercentage
+                            ?? null,
+
+                        oxygenSaturationPercentage:
+                            item.oxygenSaturationPercentage
+                            ?? null,
+
+                        caloriesBurnedToday:
+                            item.caloriesBurnedToday
+                            ?? null
+                    }
+                })
             );
-        }
+
+
+        this._renderTelemetry(
+            telemetryItems,
+            alerts
+        );
 
 
         status.textContent =

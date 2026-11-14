@@ -9,6 +9,7 @@ from device_simulator.simulation.scenario import (
 )
 from scripts.create_history_data import (
     generate_history_items,
+    previous_complete_days_end_time,
     scenario_for_datetime,
     to_dynamodb_compatible,
 )
@@ -274,3 +275,51 @@ def test_version2_history_contains_spo2_and_calorie_analytics() -> None:
         >= 0
         for item in items
     )
+
+def test_version1_demo_history_excludes_v2_only_analytics() -> None:
+    end_time = datetime(
+        2026, 9, 8, 22, 0, 0,
+        tzinfo=timezone.utc,
+    )
+
+    items = generate_history_items(
+        days=1,
+        device_id="test-device",
+        seed=9,
+        end_time=end_time,
+        software_version="1.0.0",
+    )
+
+    assert all(item["softwareVersion"] == "1.0.0" for item in items)
+    assert all("spo2" not in item.get("analytics", {}) for item in items)
+    assert all("calories" not in item.get("analytics", {}) for item in items)
+
+
+def test_previous_complete_days_end_at_local_midnight() -> None:
+    now = datetime(
+        2026, 9, 13, 8, 30, 0,
+        tzinfo=timezone.utc,
+    )
+
+    end_time = previous_complete_days_end_time(
+        timezone_name="Europe/Sarajevo",
+        now=now,
+    )
+
+    # September is UTC+2 in Sarajevo, so local 00:00 is 22:00 UTC
+    # on the preceding calendar date.
+    assert end_time == datetime(
+        2026, 9, 12, 22, 0, 0,
+        tzinfo=timezone.utc,
+    )
+
+    items = generate_history_items(
+        days=3,
+        device_id="test-device",
+        seed=10,
+        end_time=end_time,
+        software_version="1.0.0",
+    )
+
+    assert len(items) == 72
+    assert items[-1]["windowEnd"] == end_time.isoformat()

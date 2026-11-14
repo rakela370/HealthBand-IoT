@@ -7,6 +7,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import boto3
 from dotenv import load_dotenv
@@ -28,6 +29,9 @@ from device_simulator.simulation.scenario_engine import (
 )
 from device_simulator.simulation.user_profile import (
     UserProfile,
+)
+from device_simulator.utils.versioning import (
+    is_at_least,
 )
 
 
@@ -101,14 +105,16 @@ def generate_history_items(
     device_id: str = DEFAULT_DEVICE_ID,
     seed: int = 42,
     end_time: datetime | None = None,
+    software_version: str = "2.0.0",
 ) -> list[dict[str, Any]]:
     """
     Generate hourly aggregate records using the real simulator models.
 
     One aggregate record is generated for every hour.
 
-    HealthBand 2.0.0 historical records include simulated SpO2 analytics
-    and derived estimated-calorie analytics.
+    The generated schema follows the requested software version.
+    Version 1.0.0 history contains only the v1 sensor/analytics feature set,
+    while version 2.0.0 also contains SpO2 and estimated-calorie analytics.
     """
 
     if days <= 0:
@@ -120,6 +126,11 @@ def generate_history_items(
         raise ValueError(
             "device_id cannot be empty."
         )
+
+    version2 = is_at_least(
+        software_version,
+        "2.0.0",
+    )
 
     if end_time is None:
         end_time = (
@@ -165,6 +176,8 @@ def generate_history_items(
                 user_profile
             )
         )
+        if version2
+        else None
     )
 
     results: list[
@@ -218,7 +231,7 @@ def generate_history_items(
                     seed
                     + window_index
                 ),
-                software_version="2.0.0",
+                software_version=software_version,
             )
         )
 
@@ -227,12 +240,12 @@ def generate_history_items(
                 device_id=(
                     device_id
                 ),
-                software_version="2.0.0",
+                software_version=software_version,
                 window_sec=float(
                     SAMPLES_PER_HOUR
                 ),
                 spo2_minimum_threshold=92.0,
-                spo2_enabled=True,
+                spo2_enabled=version2,
             )
         )
 
@@ -268,27 +281,30 @@ def generate_history_items(
                 )
             )
 
-            calorie_values = (
-                calorie_estimator
-                .estimate_interval(
-                    measurements=(
-                        snapshot.measurements
-                    ),
-                    activity_level=(
-                        snapshot.activity_level
-                    ),
-                    scenario=(
-                        snapshot.scenario
-                    ),
-                    elapsed_sec=(
-                        3600.0
-                        / SAMPLES_PER_HOUR
-                    ),
-                    timestamp=(
-                        historical_timestamp
-                    ),
+            calorie_values: dict[str, Any] = {}
+
+            if calorie_estimator is not None:
+                calorie_values = (
+                    calorie_estimator
+                    .estimate_interval(
+                        measurements=(
+                            snapshot.measurements
+                        ),
+                        activity_level=(
+                            snapshot.activity_level
+                        ),
+                        scenario=(
+                            snapshot.scenario
+                        ),
+                        elapsed_sec=(
+                            3600.0
+                            / SAMPLES_PER_HOUR
+                        ),
+                        timestamp=(
+                            historical_timestamp
+                        ),
+                    )
                 )
-            )
 
             historical_snapshot = (
                 replace(
@@ -373,6 +389,50 @@ def generate_history_items(
 
     return (
         results
+    )
+
+
+def previous_complete_days_end_time(
+    timezone_name: str = "Europe/Sarajevo",
+    now: datetime | None = None,
+) -> datetime:
+    """Return today's local midnight expressed in UTC.
+
+    Demo-history generation uses this as the exclusive end of the seeded
+    period so a fresh v1 launch starts today's live counters from zero while
+    the previous complete days are already available in DynamoDB.
+    """
+
+    zone = ZoneInfo(
+        timezone_name
+    )
+
+    reference = (
+        now
+        if now is not None
+        else datetime.now(
+            timezone.utc
+        )
+    )
+
+    if reference.tzinfo is None:
+        raise ValueError(
+            "now must be timezone-aware."
+        )
+
+    local = reference.astimezone(
+        zone
+    )
+
+    local_midnight = local.replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    return local_midnight.astimezone(
+        timezone.utc
     )
 
 
@@ -549,6 +609,32 @@ def build_argument_parser(
     )
 
     parser.add_argument(
+        "--software-version",
+        default="2.0.0",
+        help=(
+            "Schema/feature version used for generated history. "
+            "Use 1.0.0 for the fresh v1 defense demo."
+        ),
+    )
+
+    parser.add_argument(
+        "--previous-complete-days",
+        action="store_true",
+        help=(
+            "Seed only complete days before today's local midnight. "
+            "Useful for the repeatable v1 demonstration."
+        ),
+    )
+
+    parser.add_argument(
+        "--timezone",
+        default="Europe/Sarajevo",
+        help=(
+            "Local timezone used with --previous-complete-days."
+        ),
+    )
+
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help=(
@@ -605,6 +691,14 @@ def main() -> None:
         f"history for {args.days} day(s)..."
     )
 
+    end_time = (
+        previous_complete_days_end_time(
+            timezone_name=args.timezone
+        )
+        if args.previous_complete_days
+        else None
+    )
+
     items = (
         generate_history_items(
             days=(
@@ -615,6 +709,10 @@ def main() -> None:
             ),
             seed=(
                 args.seed
+            ),
+            end_time=end_time,
+            software_version=(
+                args.software_version
             ),
         )
     )

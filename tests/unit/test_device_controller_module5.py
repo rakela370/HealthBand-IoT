@@ -319,8 +319,9 @@ async def test_fahrenheit_configuration_changes_external_telemetry() -> None:
     )
 
     assert (
-        "skinTemperatureCelsius"
-        not in measurements
+        30.0
+        <= float(measurements["skinTemperatureCelsius"])
+        <= 37.0
     )
 
     await controller.shutdown()

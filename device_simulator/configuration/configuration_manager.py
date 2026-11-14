@@ -162,6 +162,22 @@ class ConfigurationManager:
                 file
             )
 
+        # The runtime file is shared across installed releases. After an
+        # upgrade to v2 it legitimately contains SpO2-only fields. If the
+        # device later starts or rolls back to v1, those newer persisted
+        # fields must not make the older release unbootable. This filtering
+        # applies only while loading stored state; apply_delta() still uses
+        # the strict validator and therefore rejects v2-only remote
+        # configuration sent to a v1 device.
+        if not self._supports_spo2:
+            raw = dict(raw)
+            for field in (
+                "spo2AlertsEnabled",
+                "spo2MinimumThreshold",
+                "spo2MeasurementEnabled",
+            ):
+                raw.pop(field, None)
+
         try:
             return (
                 self._validator.apply_delta(

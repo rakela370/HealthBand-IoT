@@ -21,6 +21,7 @@ class UserProfile:
     exercising_heart_rate_bpm: float = 132.0
     recovery_heart_rate_bpm: float = 88.0
     stress_heart_rate_bpm: float = 122.0
+    overexertion_heart_rate_bpm: float = 190.0
 
     base_skin_temperature_c: float = 33.6
 

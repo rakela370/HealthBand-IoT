@@ -106,6 +106,33 @@ class DynamoDbService:
             limit=limit,
         )
 
+    def get_telemetry_recent(
+        self,
+        device_id: str,
+        start_iso: str,
+        end_iso: str,
+        limit: int = 100000,
+    ) -> list[dict[str, Any]]:
+        """Return the newest raw telemetry rows in chronological order.
+
+        Long history views still need the most recent live telemetry even when
+        local analytics has been disabled in Device Shadow. Querying newest
+        first prevents a bounded request from returning only old rows.
+        """
+
+        items = self._query_range(
+            table=self.telemetry,
+            partition_key="deviceId",
+            partition_value=device_id,
+            sort_key="timestamp",
+            start_value=start_iso,
+            end_value=end_iso,
+            limit=limit,
+            scan_index_forward=False,
+        )
+
+        return list(reversed(items))
+
     def get_analytics(
         self,
         device_id: str,
@@ -326,6 +353,7 @@ class DynamoDbService:
         end_value: str,
         limit: int,
         filter_expression: Any | None = None,
+        scan_index_forward: bool = True,
     ) -> list[dict[str, Any]]:
         """Perform paginated DynamoDB range query."""
 
@@ -360,7 +388,7 @@ class DynamoDbService:
                         end_value,
                     )
                 ),
-                "ScanIndexForward": True,
+                "ScanIndexForward": scan_index_forward,
                 "Limit": min(
                     500,
                     limit,

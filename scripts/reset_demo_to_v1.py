@@ -12,6 +12,11 @@ Removed:
 - locally installed semantic-version release directories newer/different than 1.0.0
 - .ota_staging
 - ota_downloads
+- runtime/device_config.json
+
+The persisted device configuration is removed intentionally because
+HealthBand 2.x can store SpO2 settings that HealthBand 1.0.0 does not
+support.
 """
 
 from __future__ import annotations
@@ -55,6 +60,11 @@ RUNTIME_ROOT = (
 PREVIOUS_STATE_BACKUP = (
     RUNTIME_ROOT
     / "active_release.before_demo_reset.json"
+)
+
+RUNTIME_DEVICE_CONFIG_FILE = (
+    RUNTIME_ROOT
+    / "device_config.json"
 )
 
 TEMPORARY_OTA_PATHS = [
@@ -257,7 +267,7 @@ def windows_force_remove(
 def remove_path(
     path: Path,
 ) -> None:
-    """Remove a local release/staging path robustly."""
+    """Remove a local release/runtime/staging path robustly."""
 
     if not path.exists():
         return
@@ -332,7 +342,7 @@ def remove_path(
         return
 
     message = (
-        "Ne mogu obrisati lokalni OTA direktorijum:\n"
+        "Ne mogu obrisati lokalni HealthBand fajl/direktorijum:\n"
         f"{path}\n\n"
         "Zatvori svaki stari HealthBand/Uvicorn proces. "
         "Ako nema Python procesa, OneDrive ili Windows "
@@ -503,6 +513,14 @@ def verify_reset_result() -> None:
                 f"{path}"
             )
 
+    if RUNTIME_DEVICE_CONFIG_FILE.exists():
+
+        raise DemoResetError(
+            "Persisted device configuration still exists "
+            "after reset:\n"
+            f"{RUNTIME_DEVICE_CONFIG_FILE}"
+        )
+
 
 def reset_demo_to_v1() -> None:
     """Perform a complete local HealthBand demo reset."""
@@ -563,6 +581,17 @@ def reset_demo_to_v1() -> None:
                 path
             )
 
+    if RUNTIME_DEVICE_CONFIG_FILE.exists():
+
+        print(
+            "Removing incompatible runtime configuration: "
+            f"{RUNTIME_DEVICE_CONFIG_FILE.name}"
+        )
+
+        remove_path(
+            RUNTIME_DEVICE_CONFIG_FILE
+        )
+
     print(
         "Writing active release state..."
     )
@@ -587,6 +616,10 @@ def reset_demo_to_v1() -> None:
 
     print(
         "Temporary OTA data: removed"
+    )
+
+    print(
+        "Persisted device configuration: reset"
     )
 
     print(

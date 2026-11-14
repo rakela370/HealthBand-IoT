@@ -220,7 +220,7 @@ def test_version2_frontend_hooks_are_present() -> None:
     )
 
     assert (
-        "dailyTotalKcal"
+        "caloriesBurnedToday"
         in charts
     )
 
@@ -357,3 +357,62 @@ def test_module12_placeholder_is_not_present() -> None:
             value
             not in html
         )
+
+def test_command_menu_is_grouped_and_contains_overexertion_scenario() -> None:
+    html = read("index.html")
+
+    for label in [
+        "Monitoring & Device",
+        "Simulation & Activity",
+        "Sensors",
+        "Power & Connectivity",
+    ]:
+        assert f'<optgroup label="{label}">' in html
+
+    assert 'value="OVEREXERTION"' in html
+
+
+def test_overexertion_watch_warning_hooks_are_present() -> None:
+    simulation = read("js/simulation.js")
+    animations = read("css/animations.css")
+
+    assert "watch-danger-banner" in simulation
+    assert 'telemetry.scenario === "OVEREXERTION"' in simulation
+    assert "bpm >= 180" in simulation
+    assert ".watch-screen.is-danger" in animations
+
+
+def test_history_opens_on_seeded_seven_day_view() -> None:
+    html = read("index.html")
+    charts = read("js/charts.js")
+
+    assert 'class="period-button active"\n                        data-period="7d"' in html
+    assert 'this.period =\n            "7d";' in charts
+
+
+def test_history_uses_one_normalized_series_for_every_period() -> None:
+    charts = read("js/charts.js")
+    api = read("js/api.js")
+
+    assert ".getHistorySeries(" in charts
+    assert "getHistorySeries(" in api
+    assert "history-series?period=" in api
+    assert ".getAnalytics(" not in charts
+    assert ".getTelemetry(" not in charts
+
+
+def test_history_restores_original_single_line_chart_style() -> None:
+    charts = read("js/charts.js")
+    assert "_shortTime(" in charts
+    assert "spanGaps: true" in charts
+    assert 'type: "linear"' not in charts
+    assert '"Peak"' not in charts
+    assert "heartRatePeakTimestamp" not in charts
+
+
+def test_history_keeps_original_alert_bar_style() -> None:
+    charts = read("js/charts.js")
+    assert "_renderAlerts(" in charts
+    assert "_alertBuckets" not in charts
+    assert "_alertBucketMs" not in charts
+

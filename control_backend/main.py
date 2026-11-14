@@ -62,6 +62,9 @@ from control_backend.aws.shadow_service import (
 from control_backend.services.realtime_state_store import (
     RealtimeStateStore,
 )
+from control_backend.services.local_device_bridge import (
+    LocalDeviceTelemetryBridge,
+)
 from control_backend.settings import (
     BackendSettings,
 )
@@ -260,6 +263,20 @@ async def lifespan(
         )
     )
 
+    local_telemetry_bridge = LocalDeviceTelemetryBridge(
+        device_id=settings.device_id,
+        database_path=settings.resolve_path(
+            "runtime/healthband.db"
+        ),
+        realtime_store=realtime_store,
+        broadcaster=broadcaster,
+    )
+
+    local_telemetry_bridge_task = asyncio.create_task(
+        local_telemetry_bridge.run(),
+        name="healthband-local-telemetry-bridge",
+    )
+
     app.state.settings = settings
 
     app.state.dynamodb_service = (
@@ -294,6 +311,10 @@ async def lifespan(
         mqtt_subscriber
     )
 
+    app.state.local_telemetry_bridge = (
+        local_telemetry_bridge
+    )
+
     if (
         settings
         .backend_mqtt_enabled
@@ -317,6 +338,15 @@ async def lifespan(
         yield
 
     finally:
+        local_telemetry_bridge.stop()
+
+        try:
+            await local_telemetry_bridge_task
+        except Exception:
+            logger.exception(
+                "Error while stopping local telemetry bridge."
+            )
+
         if (
             settings
             .backend_mqtt_enabled

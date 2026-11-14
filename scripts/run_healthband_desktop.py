@@ -986,6 +986,69 @@ def run_application(
         )
 
 
+def seed_v1_demo_history() -> None:
+    """Seed three complete prior days of v1 analytics for defense demos.
+
+    The cloud seed is intentionally best-effort: a temporary AWS problem must
+    not prevent the simulated device from starting. Re-running the seed is
+    safe because the history generator overwrites the same DynamoDB partition/
+    sort keys for the same complete-day windows.
+    """
+
+    print()
+    print(
+        "Preparing three complete days of synthetic v1 history..."
+    )
+
+    command = [
+        sys.executable,
+        "-m",
+        "scripts.create_history_data",
+        "--days",
+        "3",
+        "--software-version",
+        "1.0.0",
+        "--previous-complete-days",
+    ]
+
+    try:
+        result = subprocess.run(
+            command,
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60.0,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        print(
+            "WARNING: Demo history seed timed out. "
+            "HealthBand will still start normally."
+        )
+        return
+
+    if result.returncode == 0:
+        print(
+            "Demo history: READY (previous 3 complete days)."
+        )
+        return
+
+    print(
+        "WARNING: Demo history could not be written to DynamoDB. "
+        "HealthBand will still start normally."
+    )
+
+    details = (
+        result.stderr.strip()
+        or result.stdout.strip()
+    )
+
+    if details:
+        print(
+            details[-2000:]
+        )
+
+
 def main() -> None:
     """Command-line entry point."""
 
@@ -1014,6 +1077,8 @@ def main() -> None:
             )
 
             reset_demo_to_v1()
+
+            seed_v1_demo_history()
 
         run_application(
             fullscreen=(

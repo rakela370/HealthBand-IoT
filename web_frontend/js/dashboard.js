@@ -649,6 +649,9 @@ export class DashboardView {
             STRESS_EVENT:
                 "Technical stress-event simulation.",
 
+            OVEREXERTION:
+                "Simulated excessive sprint effort with a high heart-rate alert.",
+
             SENSOR_FAILURE:
                 "A simulated sensor fault is active.",
 

@@ -195,6 +195,16 @@ export class ApiClient {
     }
 
 
+    getHistorySeries(
+        period = "1h"
+    ) {
+
+        return this.request(
+            `/api/devices/${this.deviceId}/history-series?period=${encodeURIComponent(period)}`
+        );
+    }
+
+
     getTelemetry(
         period = "1h"
     ) {

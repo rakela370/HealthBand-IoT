@@ -24,6 +24,7 @@ class CommandValidator:
         "skin_temperature",
         "step_counter",
         "battery",
+        "spo2",
     }
 
     def __init__(

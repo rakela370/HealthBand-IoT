@@ -18,6 +18,8 @@ from device_simulator.sensors.sensor_manager import (
 class AlertManager:
     """Evaluate snapshots and generate technical alerts."""
 
+    OVEREXERTION_ALERT_BPM = 180.0
+
     def __init__(
         self,
         device_id: str,
@@ -120,6 +122,34 @@ class AlertManager:
                         self.heart_rate_maximum_resting_threshold
                     ),
                     sensor_name="heart_rate",
+                )
+            )
+
+        overexertion_heart_rate = (
+            heart_rate is not None
+            and snapshot.scenario == "OVEREXERTION"
+            and float(heart_rate) >= self.OVEREXERTION_ALERT_BPM
+        )
+
+        if self._evaluator.should_trigger(
+            rule_key="overexertion-heart-rate",
+            condition=overexertion_heart_rate,
+            now=now,
+            consecutive_required=1,
+            cooldown_sec=30.0,
+        ):
+            alerts.append(
+                self._create_alert(
+                    snapshot=snapshot,
+                    alert_type=AlertType.OVEREXERTION_HEART_RATE,
+                    severity=AlertSeverity.HIGH,
+                    measured_value=heart_rate,
+                    configured_threshold=self.OVEREXERTION_ALERT_BPM,
+                    sensor_name="heart_rate",
+                    message=(
+                        "Simulated overexertion detected: heart rate "
+                        "exceeded the demonstration high-HR limit."
+                    ),
                 )
             )
 

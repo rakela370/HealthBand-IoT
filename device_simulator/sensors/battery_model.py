@@ -51,6 +51,20 @@ class BatteryModel(BaseSensor):
 
         self._charging = False
 
+    def restore_runtime_state(
+        self,
+        *,
+        percentage: float,
+        charging: bool = False,
+    ) -> None:
+        """Restore battery level and charging flag after restart/OTA."""
+
+        self._percentage = max(
+            0.0,
+            min(100.0, float(percentage)),
+        )
+        self._charging = bool(charging)
+
     def set_percentage(
         self,
         percentage: float,

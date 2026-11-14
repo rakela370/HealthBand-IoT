@@ -70,41 +70,56 @@ def test_sensor_failure_removes_failed_sensor_value(
     )
 
 
-def test_leaving_sensor_failure_restores_sensor(
+def test_sensor_failure_persists_until_explicit_restore(
 ) -> None:
-    manager = SensorManager(
-        random_seed=1
-    )
-
+    manager = SensorManager(random_seed=1)
     engine = ScenarioEngine()
 
+    engine.set_scenario(SimulationScenario.RUNNING)
+    manager.simulate_sensor_failure("heart_rate")
+
+    failed = manager.read_all(
+        context=engine.get_context(),
+        elapsed_sec=2.0,
+    )
+    assert "heartRateBpm" not in failed.measurements
+    assert failed.sensor_status["heart_rate"] == "FAILED"
+    assert failed.scenario == "RUNNING"
+
+    # Changing physical activity must not magically repair hardware.
+    engine.set_scenario(SimulationScenario.WALKING)
+    still_failed = manager.read_all(
+        context=engine.get_context(),
+        elapsed_sec=2.0,
+    )
+    assert "heartRateBpm" not in still_failed.measurements
+    assert still_failed.sensor_status["heart_rate"] == "FAILED"
+    assert still_failed.scenario == "WALKING"
+
+    manager.restore_sensor("heart_rate")
+    restored = manager.read_all(
+        context=engine.get_context(),
+        elapsed_sec=2.0,
+    )
+    assert "heartRateBpm" in restored.measurements
+    assert restored.sensor_status["heart_rate"] == "OK"
+
+
+def test_scenario_failure_restore_survives_next_read() -> None:
+    manager = SensorManager(random_seed=5)
+    engine = ScenarioEngine()
+    engine.set_scenario(SimulationScenario.RUNNING)
     engine.set_scenario(
         SimulationScenario.SENSOR_FAILURE,
         failed_sensor_name="heart_rate",
     )
 
-    manager.read_all(
-        context=engine.get_context(),
-        elapsed_sec=2.0,
-    )
+    failed = manager.read_all(engine.get_context(), elapsed_sec=2.0)
+    assert failed.sensor_status["heart_rate"] == "FAILED"
 
-    engine.set_scenario(
-        SimulationScenario.RESTING
-    )
-
-    snapshot = manager.read_all(
-        context=engine.get_context(),
-        elapsed_sec=2.0,
-    )
-
-    assert (
-        "heartRateBpm"
-        in snapshot.measurements
-    )
-
-    assert (
-        snapshot.sensor_status[
-            "heart_rate"
-        ]
-        == "OK"
-    )
+    engine.clear_sensor_failure("heart_rate")
+    manager.restore_sensor("heart_rate")
+    restored = manager.read_all(engine.get_context(), elapsed_sec=2.0)
+    assert restored.scenario == "RUNNING"
+    assert restored.sensor_status["heart_rate"] == "OK"
+    assert "heartRateBpm" in restored.measurements

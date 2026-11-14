@@ -81,16 +81,10 @@ def test_skin_temperature_changes_gradually(
         elapsed_sec=2.0,
     )
 
-    assert (
-        sensor.current_celsius
-        > before
-    )
-
-    assert (
-        sensor.current_celsius
-        - before
-        < 0.2
-    )
+    # Wrist/peripheral skin temperature is modeled separately from core
+    # temperature and changes slowly during running.
+    assert sensor.current_celsius < before
+    assert before - sensor.current_celsius < 0.2
 
 
 def test_resting_step_count_is_zero() -> None:

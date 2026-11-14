@@ -11,6 +11,7 @@ from fastapi import (
 )
 
 from control_backend.models.command_models import (
+    BackendCommandType,
     CommandCreateRequest,
 )
 
@@ -46,7 +47,7 @@ async def send_command(
     command: CommandCreateRequest,
     request: Request,
 ) -> dict[str, Any]:
-    """Publish one command to AWS IoT Core."""
+    """Deliver one HealthBand command through its appropriate control path."""
 
     ensure_device(
         request,
@@ -57,27 +58,50 @@ async def send_command(
         uuid4()
     )
 
-    try:
-        payload = (
-            await asyncio.to_thread(
+    if command.type == BackendCommandType.RESTORE_NETWORK:
+        # During a simulated outage the wearable is deliberately disconnected
+        # from MQTT, so publishing RESTORE_NETWORK to the very transport that
+        # is down cannot reach it. Only this simulator-control command uses the
+        # shared local SQLite control path; all normal device commands remain
+        # AWS IoT MQTT commands.
+        try:
+            payload = await asyncio.to_thread(
                 request.app.state
-                .iot_data_client
-                .publish_command,
-                device_id,
+                .local_telemetry_bridge
+                .request_network_restore,
                 command_id,
-                command.type.value,
-                command.parameters,
             )
-        )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Unable to request local network restoration: "
+                    f"{exc}"
+                ),
+            ) from exc
 
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "Unable to publish HealthBand command: "
-                f"{exc}"
-            ),
-        ) from exc
+    else:
+        try:
+            payload = (
+                await asyncio.to_thread(
+                    request.app.state
+                    .iot_data_client
+                    .publish_command,
+                    device_id,
+                    command_id,
+                    command.type.value,
+                    command.parameters,
+                )
+            )
+
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Unable to publish HealthBand command: "
+                    f"{exc}"
+                ),
+            ) from exc
 
     await (
         request.app.state

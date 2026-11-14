@@ -238,6 +238,12 @@ class OtaService:
             except ValueError:
                 continue
 
+            # Internal/rollback-test packages may remain on disk for
+            # engineering regression tests, but they are not installable
+            # releases and must never appear in the user's OTA selector.
+            if bool(manifest.get("hidden", False)):
+                continue
+
             artifact_name = str(
                 manifest.get(
                     "artifact",

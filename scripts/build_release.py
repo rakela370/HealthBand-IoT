@@ -90,64 +90,54 @@ def should_include(
     )
 
 
+def resolve_device_source(
+    source_root: Path,
+    version: str,
+) -> Path:
+    """Return the canonical source tree for a release version.
+
+    Version 1.0.0 is intentionally kept as an installed baseline payload so
+    rebuilding it cannot accidentally include v2-only SpO2/calorie features.
+    Later versions are built from the current root device_simulator source.
+    """
+
+    if version == "1.0.0":
+        baseline = (
+            source_root
+            / "releases"
+            / "1.0.0"
+            / "payload"
+            / "device_simulator"
+        )
+        if baseline.is_dir():
+            return baseline
+
+    current = source_root / "device_simulator"
+    if not current.is_dir():
+        raise RuntimeError(
+            "device_simulator directory was not found."
+        )
+    return current
+
+
 def copy_device_source(
     source_root: Path,
     payload_root: Path,
+    version: str,
 ) -> None:
-    """Copy safe device source into release payload."""
+    """Copy the version-correct safe device source into a release payload."""
 
-    device_source = (
-        source_root
-        / "device_simulator"
-    )
+    device_source = resolve_device_source(source_root, version)
+    destination = payload_root / "device_simulator"
 
-    if (
-        not device_source
-        .is_dir()
-    ):
-        raise RuntimeError(
-            "device_simulator directory "
-            "was not found."
-        )
-
-    destination = (
-        payload_root
-        / "device_simulator"
-    )
-
-    for path in (
-        device_source.rglob(
-            "*"
-        )
-    ):
-
-        if (
-            not should_include(
-                path
-            )
-        ):
+    for path in device_source.rglob("*"):
+        if not should_include(path):
             continue
 
-        relative = (
-            path.relative_to(
-                device_source
-            )
-        )
-
-        target = (
-            destination
-            / relative
-        )
-
-        target.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        shutil.copy2(
-            path,
-            target,
-        )
+        relative = path.relative_to(device_source)
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
 
 
 def build_file_hashes(
@@ -246,10 +236,17 @@ def main() -> None:
 
     engine = ScenarioEngine()
 
-    manager = SensorManager(
-        random_seed=123,
-        software_version={version!r},
-    )
+    try:
+        manager = SensorManager(
+            random_seed=123,
+            software_version={version!r},
+        )
+    except TypeError:
+        # HealthBand 1.0.0 deliberately has the smaller v1 constructor and
+        # feature set. Its self-test must still validate the baseline payload.
+        manager = SensorManager(
+            random_seed=123,
+        )
 
     snapshot = manager.read_all(
         engine.get_context(),
@@ -426,6 +423,7 @@ def build_release(
         copy_device_source(
             source_root,
             payload_root,
+            version,
         )
 
         create_self_test(
